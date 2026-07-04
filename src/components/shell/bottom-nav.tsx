@@ -20,9 +20,9 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="bottom-nav app-chrome fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur"
+      className="bottom-nav app-chrome fixed inset-x-0 bottom-0 z-40 px-3 pt-1"
     >
-      <div className="mx-auto flex max-w-2xl items-stretch justify-around">
+      <div className="glass mx-auto flex max-w-2xl items-stretch justify-around rounded-3xl border shadow-[var(--shadow-lift)]">
         {TABS.map((tab) => {
           const active = tab.match.some(
             (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -33,12 +33,26 @@ export function BottomNav() {
               href={tab.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-11 min-w-11 flex-1 flex-col items-center gap-0.5 rounded-md py-2 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "group relative flex min-h-11 min-w-11 flex-1 flex-col items-center gap-0.5 rounded-3xl py-2 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 active ? "text-primary" : "text-muted-foreground",
               )}
             >
-              <tab.icon className="size-5" aria-hidden />
-              {tab.label}
+              {/* Active pill glides in behind the icon */}
+              <span
+                aria-hidden
+                className={cn(
+                  "absolute top-1 h-8 w-14 rounded-full bg-primary/12 transition-all duration-300 [transition-timing-function:var(--ease-spring)]",
+                  active ? "scale-100 opacity-100" : "scale-50 opacity-0",
+                )}
+              />
+              <tab.icon
+                className={cn(
+                  "relative size-5 transition-transform duration-300 [transition-timing-function:var(--ease-spring)]",
+                  active && "-translate-y-px scale-110",
+                )}
+                aria-hidden
+              />
+              <span className="relative">{tab.label}</span>
             </Link>
           );
         })}

@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/client/fetcher";
+import { cn } from "@/lib/utils";
 import type { FastingSessionDTO } from "@/types/api";
 
 function formatElapsed(ms: number): string {
@@ -83,32 +84,80 @@ export default function FastingPage() {
       ) : sessions === null ? (
         <ListSkeleton rows={4} />
       ) : (
-        <div className="space-y-4 p-4">
+        <div className="stagger-children space-y-4 p-4">
           <Card>
-            <CardContent className="flex flex-col items-center gap-4 py-8">
-              {active ? (
-                <>
-                  <p className="text-sm text-muted-foreground">Fasting for</p>
-                  <p
-                    className="text-5xl font-bold tabular-nums"
-                    aria-live="polite"
-                    aria-label="Elapsed fasting time"
-                  >
-                    {formatElapsed(now - new Date(active.startAt).getTime())}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Started {new Date(active.startAt).toLocaleString()}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-muted-foreground">No fast in progress</p>
-                  <p className="text-5xl font-bold tabular-nums text-muted-foreground/40">
-                    00:00:00
-                  </p>
-                </>
-              )}
-              <Button size="lg" disabled={busy} onClick={toggleFast} className="min-w-40">
+            <CardContent className="flex flex-col items-center gap-5 py-8">
+              {/* Progress ring: sweeps once per hour while fasting */}
+              <div
+                className={cn(
+                  "relative flex size-56 items-center justify-center rounded-full",
+                  active && "animate-ring-breathe",
+                )}
+              >
+                <svg viewBox="0 0 200 200" className="absolute inset-0 -rotate-90" aria-hidden>
+                  <circle
+                    cx="100"
+                    cy="100"
+                    r="90"
+                    fill="none"
+                    stroke="var(--muted)"
+                    strokeWidth="10"
+                  />
+                  <circle
+                    cx="100"
+                    cy="100"
+                    r="90"
+                    fill="none"
+                    stroke="var(--primary)"
+                    strokeWidth="10"
+                    strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 90}
+                    strokeDashoffset={
+                      2 *
+                      Math.PI *
+                      90 *
+                      (active
+                        ? 1 -
+                          (((now - new Date(active.startAt).getTime()) / 60_000) % 60) / 60
+                        : 1)
+                    }
+                    className="transition-[stroke-dashoffset] duration-1000 ease-linear"
+                  />
+                </svg>
+                <div className="flex flex-col items-center">
+                  {active ? (
+                    <>
+                      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                        Fasting for
+                      </p>
+                      <p
+                        className="text-4xl font-extrabold tracking-tight tabular-nums"
+                        aria-live="polite"
+                        aria-label="Elapsed fasting time"
+                      >
+                        {formatElapsed(now - new Date(active.startAt).getTime())}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        since{" "}
+                        {new Date(active.startAt).toLocaleTimeString(undefined, {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                        Ready when you are
+                      </p>
+                      <p className="text-4xl font-extrabold tracking-tight tabular-nums text-muted-foreground/30">
+                        00:00:00
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+              <Button size="lg" disabled={busy} onClick={toggleFast} className="min-w-44">
                 {active ? (
                   <Pause data-icon="inline-start" aria-hidden />
                 ) : (

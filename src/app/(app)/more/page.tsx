@@ -200,7 +200,7 @@ export default function MorePage() {
   return (
     <main>
       <PageHeader title="More" />
-      <div className="space-y-4 p-4">
+      <div className="stagger-children space-y-4 p-4">
         <ProfileCard />
         <GoalsManager />
         <ReportsCard />

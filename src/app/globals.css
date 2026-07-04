@@ -83,7 +83,18 @@
   --chart-3: #0b7a54;
   --chart-4: #5c6b64;
   --chart-5: #dc2626;
-  --radius: 0.625rem;
+  --radius: 1rem;
+  /* Depth + motion tokens */
+  --shadow-soft: 0 1px 2px rgb(13 31 24 / 0.04), 0 4px 16px -4px rgb(13 31 24 / 0.08);
+  --shadow-lift: 0 2px 4px rgb(13 31 24 / 0.06), 0 12px 32px -8px rgb(13 31 24 / 0.16);
+  --shadow-glow: 0 4px 20px -4px color-mix(in oklab, var(--primary), transparent 55%);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --gradient-brand: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in oklab, var(--primary), #063 45%)
+  );
   --sidebar: #edf3f0;
   --sidebar-foreground: #141f1b;
   --sidebar-primary: #0f9d6e;
@@ -127,6 +138,8 @@
   --chart-3: #0d9488;
   --chart-4: #93a69d;
   --chart-5: #ef4444;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px -4px rgb(0 0 0 / 0.4);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.35), 0 12px 32px -8px rgb(0 0 0 / 0.55);
   --sidebar: #16211c;
   --sidebar-foreground: #e5efe9;
   --sidebar-primary: #17b67f;
@@ -206,4 +219,142 @@ textarea,
 .food-edit-history {
   user-select: text;
   -webkit-user-select: text;
+}
+
+/* ============================================================
+   Motion system — every animation respects prefers-reduced-motion
+   ============================================================ */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes flame-flicker {
+  0%,
+  100% {
+    transform: scale(1) rotate(-2deg);
+  }
+  30% {
+    transform: scale(1.15) rotate(3deg);
+  }
+  60% {
+    transform: scale(0.95) rotate(-1deg);
+  }
+}
+@keyframes ring-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary), transparent 60%);
+  }
+  50% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+@keyframes float-blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(8px, -12px) scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* "backwards" (not "both") so no residual transform survives the animation —
+     a transformed ancestor would re-anchor position:fixed descendants. */
+  .animate-page {
+    animation: fade-up 0.45s var(--ease-out-expo) backwards;
+  }
+  .animate-fade-up {
+    animation: fade-up 0.5s var(--ease-out-expo) both;
+  }
+  .animate-scale-in {
+    animation: scale-in 0.35s var(--ease-spring) both;
+  }
+  /* Staggered entrance for direct children of a list */
+  .stagger-children > * {
+    animation: fade-up 0.45s var(--ease-out-expo) both;
+  }
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 40ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 80ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 240ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 280ms; }
+  .stagger-children > *:nth-child(n + 9) { animation-delay: 320ms; }
+  .animate-flame {
+    animation: flame-flicker 1.6s ease-in-out infinite;
+    transform-origin: 50% 85%;
+  }
+  .animate-ring-breathe {
+    animation: ring-breathe 2.4s ease-out infinite;
+  }
+  .animate-blob {
+    animation: float-blob 7s ease-in-out infinite;
+  }
+  [data-slot="skeleton"] {
+    animation: shimmer 1.8s linear infinite;
+    background: linear-gradient(
+        100deg,
+        var(--muted) 40%,
+        color-mix(in oklab, var(--muted), white 12%) 50%,
+        var(--muted) 60%
+      )
+      0 0 / 200% 100%;
+  }
+}
+
+/* Depth for surfaces (works in both themes) */
+[data-slot="card"] {
+  box-shadow: var(--shadow-soft);
+  --tw-ring-color: color-mix(in oklab, var(--foreground), transparent 93%);
+}
+
+/* Interactive tiles lift on hover, settle on press */
+.card-lift {
+  transition:
+    transform 0.25s var(--ease-spring),
+    box-shadow 0.25s ease;
+}
+@media (hover: hover) {
+  .card-lift:hover {
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: var(--shadow-lift);
+  }
+}
+.card-lift:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* Frosted chrome */
+.glass {
+  background: color-mix(in oklab, var(--card), transparent 22%);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
 }

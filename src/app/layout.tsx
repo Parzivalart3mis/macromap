@@ -71,6 +71,7 @@ export default function RootLayout({
           {children}
           <Toaster
             position="top-center"
+            richColors
             offset={{ top: "max(env(safe-area-inset-top), 16px)" }}
             mobileOffset={{ top: "max(env(safe-area-inset-top), 16px)" }}
           />

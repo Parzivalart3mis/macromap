@@ -59,29 +59,37 @@ export default function FoodPage() {
           ) : !stores ? (
             <ListSkeleton rows={4} />
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="stagger-children grid grid-cols-2 gap-3">
               {stores.map((store) => (
                 <Link
                   key={store.id}
                   href={`/stores/${store.slug}`}
-                  className="group flex min-h-24 flex-col justify-between rounded-xl border bg-card p-4 transition-colors hover:border-[var(--tile-color)]"
+                  className="card-lift group relative flex min-h-24 flex-col justify-between overflow-hidden rounded-2xl border bg-card p-4 shadow-[var(--shadow-soft)]"
                   style={
                     {
                       "--tile-color": store.theme?.primaryHex ?? "var(--primary)",
                     } as React.CSSProperties
                   }
                 >
+                  {/* Brand ribbon */}
                   <span
-                    className="size-3 rounded-full"
-                    style={{
-                      backgroundColor: store.theme?.primaryHex ?? "var(--primary)",
-                    }}
                     aria-hidden
+                    className="absolute inset-x-0 top-0 h-1.5 opacity-90"
+                    style={{
+                      background: `linear-gradient(90deg, var(--tile-color), color-mix(in oklab, var(--tile-color), transparent 45%))`,
+                    }}
                   />
+                  <span
+                    className="mt-1 flex size-9 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm"
+                    style={{ backgroundColor: "var(--tile-color)" }}
+                    aria-hidden
+                  >
+                    {store.name.charAt(0)}
+                  </span>
                   <span className="flex items-center justify-between gap-1">
                     <span className="text-sm font-semibold">{store.name}</span>
                     <ChevronRight
-                      className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                      className="size-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1"
                       aria-hidden
                     />
                   </span>

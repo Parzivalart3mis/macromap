@@ -424,7 +424,7 @@ export function AddFoodSheet({
               {searching ? (
                 <ListSkeleton rows={3} />
               ) : results.length > 0 ? (
-                <div className="divide-y rounded-xl border">
+                <div className="stagger-children divide-y rounded-xl border">
                   {results.map((food) => (
                     <FoodRow
                       key={food.id}

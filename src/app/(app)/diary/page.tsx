@@ -145,7 +145,7 @@ export default function DiaryPage() {
       ) : !current ? (
         <ListSkeleton rows={5} />
       ) : (
-        <div className="space-y-4 p-4">
+        <div className="stagger-children space-y-4 p-4">
           <DaySummary payload={current} streak={streak} onAnalyze={analyze} />
           {mergedMeals(current).map((meal) => (
             <MealCard

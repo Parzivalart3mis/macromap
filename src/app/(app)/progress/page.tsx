@@ -208,7 +208,7 @@ export default function ProgressPage() {
       ) : !overview ? (
         <ListSkeleton rows={4} />
       ) : (
-        <div className="space-y-4 p-4">
+        <div className="stagger-children space-y-4 p-4">
           {/* Split dashboard: nutrition on top, body below */}
           <Card>
             <CardHeader className="pb-2">
