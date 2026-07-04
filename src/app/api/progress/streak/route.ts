@@ -26,11 +26,15 @@ export async function GET(request: NextRequest) {
       .orderBy(desc(diaryDays.date))
       .limit(1000);
 
+    const dates = rows.map((row) => row.date);
+    // Recent logged dates power the week-strip checkmarks on the diary.
+    const twoWeeksAgo = new Date(`${today}T12:00:00Z`);
+    twoWeeksAgo.setUTCDate(twoWeeksAgo.getUTCDate() - 13);
+    const cutoff = twoWeeksAgo.toISOString().slice(0, 10);
+
     return NextResponse.json({
-      streak: computeStreak(
-        rows.map((row) => row.date),
-        today,
-      ),
+      streak: computeStreak(dates, today),
+      recentDates: dates.filter((date) => date >= cutoff),
     });
   } catch (error) {
     return handleApiError(error);

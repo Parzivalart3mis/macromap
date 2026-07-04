@@ -1,11 +1,12 @@
 "use client";
 
-import { BookmarkPlus, MoreVertical, Plus } from "lucide-react";
+import { BookmarkPlus, Coffee, Cookie, MoreHorizontal, Sandwich, Soup, UtensilsCrossed } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
 import type { DiaryEntryDTO, DiaryMealDTO } from "@/types/api";
+
+const MEAL_ICONS: Record<string, typeof Coffee> = {
+  Breakfast: Coffee,
+  Lunch: Sandwich,
+  Dinner: Soup,
+  Snacks: Cookie,
+};
 
 /* Mounted only while an entry is being edited, so state initializes fresh
    from the entry each time without reset effects. */
@@ -112,15 +120,14 @@ function EntryEditDialog({
 export function MealCard({
   meal,
   date,
-  onAddFood,
   onChanged,
 }: {
   meal: DiaryMealDTO;
   date: string;
-  onAddFood: (mealName: string) => void;
   onChanged: () => void;
 }) {
   const [editing, setEditing] = useState<DiaryEntryDTO | null>(null);
+  const Icon = MEAL_ICONS[meal.mealName] ?? UtensilsCrossed;
 
   async function saveAsTemplate() {
     const name = window.prompt("Template name", meal.mealName);
@@ -137,43 +144,48 @@ export function MealCard({
   }
 
   return (
-    <Card className="overflow-hidden py-0 gap-0">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2.5">
-        <div className="flex items-baseline gap-2">
-          <h2 className="font-semibold">{meal.mealName}</h2>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {Math.round(meal.totals.calories)} kcal
-          </span>
-        </div>
-        <div className="flex items-center">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Add food to ${meal.mealName}`}
-            onClick={() => onAddFood(meal.mealName)}
-          >
-            <Plus aria-hidden />
-          </Button>
+    <Card className="gap-0 overflow-hidden py-0">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Icon className="size-4.5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-semibold">{meal.mealName}</h2>
           {meal.entries.length > 0 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="Meal options">
-                  <MoreVertical aria-hidden />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={saveAsTemplate}>
-                  <BookmarkPlus aria-hidden />
-                  Save as template
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {Math.round(meal.totals.calories)} kcal
+            </p>
           ) : null}
         </div>
-      </CardHeader>
-      <CardContent className="p-0">
+        {meal.entries.length > 0 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="Meal options">
+                <MoreHorizontal aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={saveAsTemplate}>
+                <BookmarkPlus aria-hidden />
+                Save as template
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+        <Button size="sm" variant="secondary" className="font-bold" asChild>
+          <Link
+            href={`/diary/add?date=${date}&meal=${encodeURIComponent(meal.mealName)}`}
+          >
+            Log
+          </Link>
+        </Button>
+      </div>
+
+      <div className="border-t">
         {meal.entries.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">Nothing logged</p>
+          <p className="px-4 py-3 text-sm text-muted-foreground">
+            Nothing logged yet
+          </p>
         ) : (
           <ul className="divide-y">
             {meal.entries.map((entry) => (
@@ -202,7 +214,8 @@ export function MealCard({
             ))}
           </ul>
         )}
-      </CardContent>
+      </div>
+
       {editing ? (
         <EntryEditDialog
           entry={editing}
