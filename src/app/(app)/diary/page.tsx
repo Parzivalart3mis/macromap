@@ -318,12 +318,7 @@ function DiaryHome() {
           </div>
 
           {mergedMeals(current).map((meal) => (
-            <MealCard
-              key={meal.id}
-              meal={meal}
-              date={date}
-              onChanged={() => load(date)}
-            />
+            <MealCard key={meal.id} meal={meal} date={date} />
           ))}
           <Button variant="outline" className="w-full" onClick={() => setNewMealOpen(true)}>
             <Plus data-icon="inline-start" aria-hidden />
