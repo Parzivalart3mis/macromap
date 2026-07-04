@@ -1,0 +1,2 @@
+ALTER TABLE "foods" ADD COLUMN "log_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+UPDATE "foods" SET "log_count" = (SELECT count(*) FROM "diary_entries" WHERE "diary_entries"."food_id" = "foods"."id");

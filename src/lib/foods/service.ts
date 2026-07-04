@@ -1,7 +1,14 @@
 import { desc, eq, gt, ilike, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { foodEditHistory, foods, type Food } from "@/lib/db/schema";
+import {
+  diaryDays,
+  diaryEntries,
+  diaryMeals,
+  foodEditHistory,
+  foods,
+  type Food,
+} from "@/lib/db/schema";
 
 export const DUPLICATE_SIMILARITY_THRESHOLD = 0.4;
 /**
@@ -40,13 +47,26 @@ export async function findSimilarFoods(
   return rows;
 }
 
-export async function searchFoods(query: string, limit = 25): Promise<Food[]> {
-  // Relevance first: a hit in the food's NAME beats a hit in its brand
-  // ("bread" should list breads before every Panera Bread dish), literal
-  // substrings beat fuzzy ones, and the verified badge only breaks ties.
+export async function searchFoods(
+  query: string,
+  userId: string | null = null,
+  limit = 25,
+): Promise<Food[]> {
+  // MyFitnessPal-style relevance: a hit in the food's NAME beats a hit in its
+  // brand ("bread" lists breads before every Panera Bread dish); within that,
+  // foods THIS USER has logged come first, then globally popular foods
+  // (log_count), then similarity, with the verified badge as final tiebreak.
   const nameMatch = sql<number>`case when ${foods.name} ilike ${"%" + query + "%"} then 1 else 0 end`;
   const substrMatch = sql<number>`case when ${searchTarget} ilike ${"%" + query + "%"} then 1 else 0 end`;
   const wordScore = sql<number>`word_similarity(${query}, ${searchTarget})`;
+  const personal = userId
+    ? sql<number>`case when exists (
+        select 1 from ${diaryEntries}
+        join ${diaryMeals} on ${diaryMeals.id} = ${diaryEntries.diaryMealId}
+        join ${diaryDays} on ${diaryDays.id} = ${diaryMeals.diaryDayId}
+        where ${diaryEntries.foodId} = ${foods.id} and ${diaryDays.userId} = ${userId}
+      ) then 1 else 0 end`
+    : sql<number>`0`;
   const rows = await db
     .select()
     .from(foods)
@@ -56,7 +76,17 @@ export async function searchFoods(query: string, limit = 25): Promise<Food[]> {
         gt(wordScore, SEARCH_WORD_SIMILARITY_THRESHOLD),
       ),
     )
-    .orderBy(desc(nameMatch), desc(substrMatch), desc(wordScore), desc(foods.isVerified))
+    .orderBy(
+      desc(nameMatch),
+      desc(personal),
+      desc(foods.logCount),
+      desc(substrMatch),
+      desc(wordScore),
+      desc(foods.isVerified),
+      // Until popularity data accumulates, prefer simple generic entries
+      // ("Apple, raw") over long specific ones.
+      sql`length(${foods.name}) asc`,
+    )
     .limit(limit);
   return rows;
 }

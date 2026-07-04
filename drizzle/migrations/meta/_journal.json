@@ -15,6 +15,13 @@
       "when": 1783168963708,
       "tag": "0001_full-label-nutrients",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783205329944,
+      "tag": "0002_food-log-count",
+      "breakpoints": true
     }
   ]
 }

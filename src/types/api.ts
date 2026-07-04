@@ -31,6 +31,7 @@ export interface FoodDTO {
   vitaminDPct: number | null;
   barcode: string | null;
   isVerified: boolean;
+  logCount: number;
 }
 
 export interface DiaryEntryDTO {

@@ -1,10 +1,10 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ApiError, handleApiError, parseBody, requireDbUser } from "@/lib/api";
 import { db } from "@/lib/db";
-import { diaryEntries, savedMeals } from "@/lib/db/schema";
+import { diaryEntries, foods, savedMeals } from "@/lib/db/schema";
 import { getDiaryPayload, getOrCreateDiaryDay, getOrCreateMeal } from "@/lib/diary/service";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
@@ -45,6 +45,17 @@ export async function POST(
         nutritionSnapshotJson: { ...line.nutrition, label: line.label },
       })),
     );
+
+    // Popularity signal for search ranking.
+    const foodIds = savedMeal.entriesSnapshotJson
+      .map((line) => line.foodId)
+      .filter((id): id is string => Boolean(id));
+    if (foodIds.length > 0) {
+      await db
+        .update(foods)
+        .set({ logCount: sql`${foods.logCount} + 1` })
+        .where(inArray(foods.id, foodIds));
+    }
 
     const payload = await getDiaryPayload(userId, input.date);
     return NextResponse.json({ diary: payload }, { status: 201 });

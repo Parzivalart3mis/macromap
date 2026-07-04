@@ -122,6 +122,9 @@ export const foods = pgTable(
     vitaminDPct: doublePrecision("vitamin_d_pct"),
     barcode: text("barcode"),
     isVerified: boolean("is_verified").notNull().default(false),
+    // Global popularity signal: how many diary entries reference this food.
+    // Search ranks by it so the entries people actually log surface first.
+    logCount: integer("log_count").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

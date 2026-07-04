@@ -86,11 +86,12 @@ export async function parseNaturalLogText(text: string): Promise<ParsedFoodItem[
 /** Match each parsed item against the shared food database. */
 export async function buildSuggestions(
   items: ParsedFoodItem[],
+  userId: string | null = null,
 ): Promise<NaturalLogSuggestion[]> {
   return Promise.all(
     items.map(async (item) => {
       const query = item.brand ? `${item.brand} ${item.name}` : item.name;
-      const matches = await searchFoods(query, 1);
+      const matches = await searchFoods(query, userId, 1);
       return {
         inputName: item.brand ? `${item.name} (${item.brand})` : item.name,
         quantity: item.quantity,

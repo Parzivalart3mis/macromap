@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const input = await parseBody(request, naturalLogSchema);
 
     const items = await parseNaturalLogText(input.text);
-    const suggestions = await buildSuggestions(items);
+    const suggestions = await buildSuggestions(items, userId);
 
     const [run] = await db
       .insert(aiLoggingRuns)

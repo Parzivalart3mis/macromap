@@ -6,12 +6,12 @@ import { searchFoods } from "@/lib/foods/service";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireUserId();
+    const userId = await requireUserId();
     const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
     if (query.length < 2) {
       return NextResponse.json({ foods: [], external: [] });
     }
-    const foods = await searchFoods(query);
+    const foods = await searchFoods(query, userId);
 
     // When the shared database comes up short, offer USDA / Open Food Facts
     // results the user can import with one tap.

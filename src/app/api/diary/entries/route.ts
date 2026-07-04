@@ -1,8 +1,9 @@
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { handleApiError, parseBody, requireDbUser } from "@/lib/api";
 import { db } from "@/lib/db";
-import { diaryEntries } from "@/lib/db/schema";
+import { diaryEntries, foods } from "@/lib/db/schema";
 import {
   buildEntrySnapshot,
   getDiaryPayload,
@@ -36,6 +37,14 @@ export async function POST(request: Request) {
         nutritionSnapshotJson: snapshot,
       })
       .returning();
+
+    if (input.foodId) {
+      // Popularity signal for search ranking.
+      await db
+        .update(foods)
+        .set({ logCount: sql`${foods.logCount} + 1` })
+        .where(eq(foods.id, input.foodId));
+    }
 
     const payload = await getDiaryPayload(userId, input.date);
     return NextResponse.json({ entry, diary: payload }, { status: 201 });
