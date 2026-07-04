@@ -19,6 +19,16 @@ export function foodToNutrition(food: Food): NutritionSnapshot {
   if (food.sodiumMg != null) snapshot.sodiumMg = food.sodiumMg;
   if (food.cholesterolMg != null) snapshot.cholesterolMg = food.cholesterolMg;
   if (food.potassiumMg != null) snapshot.potassiumMg = food.potassiumMg;
+  if (food.transFatG != null) snapshot.transFatG = food.transFatG;
+  if (food.polyUnsatFatG != null) snapshot.polyUnsatFatG = food.polyUnsatFatG;
+  if (food.monoUnsatFatG != null) snapshot.monoUnsatFatG = food.monoUnsatFatG;
+  if (food.addedSugarsG != null) snapshot.addedSugarsG = food.addedSugarsG;
+  if (food.sugarAlcoholsG != null) snapshot.sugarAlcoholsG = food.sugarAlcoholsG;
+  if (food.vitaminAPct != null) snapshot.vitaminAPct = food.vitaminAPct;
+  if (food.vitaminCPct != null) snapshot.vitaminCPct = food.vitaminCPct;
+  if (food.calciumPct != null) snapshot.calciumPct = food.calciumPct;
+  if (food.ironPct != null) snapshot.ironPct = food.ironPct;
+  if (food.vitaminDPct != null) snapshot.vitaminDPct = food.vitaminDPct;
   return snapshot;
 }
 

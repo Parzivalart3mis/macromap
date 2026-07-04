@@ -8,6 +8,13 @@
       "when": 1783131029318,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783168963708,
+      "tag": "0001_full-label-nutrients",
+      "breakpoints": true
     }
   ]
 }

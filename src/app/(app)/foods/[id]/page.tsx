@@ -34,14 +34,24 @@ interface HistoryRow {
 const EDIT_FIELDS = [
   { key: "calories", label: "Calories" },
   { key: "proteinG", label: "Protein (g)" },
-  { key: "carbsG", label: "Carbs (g)" },
-  { key: "fatG", label: "Fat (g)" },
-  { key: "fiberG", label: "Fiber (g)" },
-  { key: "sugarG", label: "Sugar (g)" },
+  { key: "carbsG", label: "Total carbs (g)" },
+  { key: "fatG", label: "Total fat (g)" },
   { key: "satFatG", label: "Saturated fat (g)" },
-  { key: "sodiumMg", label: "Sodium (mg)" },
+  { key: "polyUnsatFatG", label: "Polyunsat. fat (g)" },
+  { key: "monoUnsatFatG", label: "Monounsat. fat (g)" },
+  { key: "transFatG", label: "Trans fat (g)" },
   { key: "cholesterolMg", label: "Cholesterol (mg)" },
+  { key: "sodiumMg", label: "Sodium (mg)" },
   { key: "potassiumMg", label: "Potassium (mg)" },
+  { key: "fiberG", label: "Dietary fiber (g)" },
+  { key: "sugarG", label: "Sugars (g)" },
+  { key: "addedSugarsG", label: "Added sugars (g)" },
+  { key: "sugarAlcoholsG", label: "Sugar alcohols (g)" },
+  { key: "vitaminAPct", label: "Vitamin A (% DV)" },
+  { key: "vitaminCPct", label: "Vitamin C (% DV)" },
+  { key: "calciumPct", label: "Calcium (% DV)" },
+  { key: "ironPct", label: "Iron (% DV)" },
+  { key: "vitaminDPct", label: "Vitamin D (% DV)" },
 ] as const;
 
 /* Mounted only while editing, so state initializes from the food. */
@@ -213,6 +223,16 @@ export default function FoodDetailPage({
               sodiumMg: food.sodiumMg ?? undefined,
               cholesterolMg: food.cholesterolMg ?? undefined,
               potassiumMg: food.potassiumMg ?? undefined,
+              transFatG: food.transFatG ?? undefined,
+              polyUnsatFatG: food.polyUnsatFatG ?? undefined,
+              monoUnsatFatG: food.monoUnsatFatG ?? undefined,
+              addedSugarsG: food.addedSugarsG ?? undefined,
+              sugarAlcoholsG: food.sugarAlcoholsG ?? undefined,
+              vitaminAPct: food.vitaminAPct ?? undefined,
+              vitaminCPct: food.vitaminCPct ?? undefined,
+              calciumPct: food.calciumPct ?? undefined,
+              ironPct: food.ironPct ?? undefined,
+              vitaminDPct: food.vitaminDPct ?? undefined,
             }}
           />
 

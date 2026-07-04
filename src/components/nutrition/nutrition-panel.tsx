@@ -2,15 +2,25 @@ import type { NutritionSnapshot } from "@/types/nutrition";
 
 const ROWS: Array<{ key: keyof NutritionSnapshot; label: string; unit: string }> = [
   { key: "calories", label: "Calories", unit: "kcal" },
-  { key: "proteinG", label: "Protein", unit: "g" },
-  { key: "carbsG", label: "Carbohydrates", unit: "g" },
-  { key: "fiberG", label: "Fiber", unit: "g" },
-  { key: "sugarG", label: "Sugar", unit: "g" },
-  { key: "fatG", label: "Fat", unit: "g" },
+  { key: "fatG", label: "Total fat", unit: "g" },
   { key: "satFatG", label: "Saturated fat", unit: "g" },
-  { key: "sodiumMg", label: "Sodium", unit: "mg" },
+  { key: "polyUnsatFatG", label: "Polyunsaturated fat", unit: "g" },
+  { key: "monoUnsatFatG", label: "Monounsaturated fat", unit: "g" },
+  { key: "transFatG", label: "Trans fat", unit: "g" },
   { key: "cholesterolMg", label: "Cholesterol", unit: "mg" },
+  { key: "sodiumMg", label: "Sodium", unit: "mg" },
   { key: "potassiumMg", label: "Potassium", unit: "mg" },
+  { key: "carbsG", label: "Total carbohydrates", unit: "g" },
+  { key: "fiberG", label: "Dietary fiber", unit: "g" },
+  { key: "sugarG", label: "Sugars", unit: "g" },
+  { key: "addedSugarsG", label: "Added sugars", unit: "g" },
+  { key: "sugarAlcoholsG", label: "Sugar alcohols", unit: "g" },
+  { key: "proteinG", label: "Protein", unit: "g" },
+  { key: "vitaminAPct", label: "Vitamin A", unit: "% DV" },
+  { key: "vitaminCPct", label: "Vitamin C", unit: "% DV" },
+  { key: "calciumPct", label: "Calcium", unit: "% DV" },
+  { key: "ironPct", label: "Iron", unit: "% DV" },
+  { key: "vitaminDPct", label: "Vitamin D", unit: "% DV" },
 ];
 
 /** Full nutrition facts panel for any snapshot. */

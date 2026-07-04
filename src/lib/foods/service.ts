@@ -72,6 +72,16 @@ export const EDITABLE_FOOD_FIELDS = [
   "sodiumMg",
   "cholesterolMg",
   "potassiumMg",
+  "transFatG",
+  "polyUnsatFatG",
+  "monoUnsatFatG",
+  "addedSugarsG",
+  "sugarAlcoholsG",
+  "vitaminAPct",
+  "vitaminCPct",
+  "calciumPct",
+  "ironPct",
+  "vitaminDPct",
 ] as const;
 
 export type EditableFoodField = (typeof EDITABLE_FOOD_FIELDS)[number];

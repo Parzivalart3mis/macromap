@@ -19,6 +19,16 @@ export interface FoodDTO {
   sodiumMg: number | null;
   cholesterolMg: number | null;
   potassiumMg: number | null;
+  transFatG: number | null;
+  polyUnsatFatG: number | null;
+  monoUnsatFatG: number | null;
+  addedSugarsG: number | null;
+  sugarAlcoholsG: number | null;
+  vitaminAPct: number | null;
+  vitaminCPct: number | null;
+  calciumPct: number | null;
+  ironPct: number | null;
+  vitaminDPct: number | null;
   barcode: string | null;
   isVerified: boolean;
 }

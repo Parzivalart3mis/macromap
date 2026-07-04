@@ -9,6 +9,17 @@ export interface NutritionSnapshot {
   sodiumMg?: number;
   cholesterolMg?: number;
   potassiumMg?: number;
+  transFatG?: number;
+  polyUnsatFatG?: number;
+  monoUnsatFatG?: number;
+  addedSugarsG?: number;
+  sugarAlcoholsG?: number;
+  /** Micronutrients tracked as % Daily Value, per the FDA label. */
+  vitaminAPct?: number;
+  vitaminCPct?: number;
+  calciumPct?: number;
+  ironPct?: number;
+  vitaminDPct?: number;
 }
 
 export const NUTRITION_KEYS = [
@@ -22,6 +33,16 @@ export const NUTRITION_KEYS = [
   "sodiumMg",
   "cholesterolMg",
   "potassiumMg",
+  "transFatG",
+  "polyUnsatFatG",
+  "monoUnsatFatG",
+  "addedSugarsG",
+  "sugarAlcoholsG",
+  "vitaminAPct",
+  "vitaminCPct",
+  "calciumPct",
+  "ironPct",
+  "vitaminDPct",
 ] as const satisfies readonly (keyof NutritionSnapshot)[];
 
 export type NutritionKey = (typeof NUTRITION_KEYS)[number];

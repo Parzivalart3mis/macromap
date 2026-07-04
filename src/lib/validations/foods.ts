@@ -11,6 +11,17 @@ export const nutritionFieldsSchema = z.object({
   sodiumMg: z.number().nonnegative().optional(),
   cholesterolMg: z.number().nonnegative().optional(),
   potassiumMg: z.number().nonnegative().optional(),
+  transFatG: z.number().nonnegative().optional(),
+  polyUnsatFatG: z.number().nonnegative().optional(),
+  monoUnsatFatG: z.number().nonnegative().optional(),
+  addedSugarsG: z.number().nonnegative().optional(),
+  sugarAlcoholsG: z.number().nonnegative().optional(),
+  // % Daily Value fields — can legitimately exceed 100 (e.g. fortified foods).
+  vitaminAPct: z.number().nonnegative().optional(),
+  vitaminCPct: z.number().nonnegative().optional(),
+  calciumPct: z.number().nonnegative().optional(),
+  ironPct: z.number().nonnegative().optional(),
+  vitaminDPct: z.number().nonnegative().optional(),
 });
 
 export const createFoodSchema = nutritionFieldsSchema.extend({
