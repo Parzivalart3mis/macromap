@@ -22,7 +22,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useVoiceLogging } from "@/hooks/useVoiceLogging";
 import { apiFetch } from "@/lib/client/fetcher";
-import type { FoodDTO, NaturalLogSuggestionDTO, SavedMealDTO } from "@/types/api";
+import type {
+  ExternalFoodResultDTO,
+  FoodDTO,
+  NaturalLogSuggestionDTO,
+  SavedMealDTO,
+} from "@/types/api";
 
 type LoggedVia = "search" | "barcode" | "voice" | "natural_language";
 
@@ -195,6 +200,8 @@ export function AddFoodSheet({
   // --- Search tab ---
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FoodDTO[]>([]);
+  const [externalResults, setExternalResults] = useState<ExternalFoodResultDTO[]>([]);
+  const [importingIndex, setImportingIndex] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -228,6 +235,7 @@ export function AddFoodSheet({
     if (!next) {
       setQuery("");
       setResults([]);
+      setExternalResults([]);
       setReview(null);
       setBarcodeValue("");
       setBarcodeMiss(null);
@@ -243,21 +251,40 @@ export function AddFoodSheet({
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (value.trim().length < 2) {
       setResults([]);
+      setExternalResults([]);
       return;
     }
     searchTimer.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const data = await apiFetch<{ foods: FoodDTO[] }>(
-          `/api/foods/search?q=${encodeURIComponent(value.trim())}`,
-        );
+        const data = await apiFetch<{
+          foods: FoodDTO[];
+          external: ExternalFoodResultDTO[];
+        }>(`/api/foods/search?q=${encodeURIComponent(value.trim())}`);
         setResults(data.foods);
+        setExternalResults(data.external ?? []);
       } catch {
         toast.error("Search failed");
       } finally {
         setSearching(false);
       }
     }, 250);
+  }
+
+  async function importExternal(result: ExternalFoodResultDTO, index: number) {
+    setImportingIndex(index);
+    try {
+      const { food } = await apiFetch<{ food: FoodDTO }>("/api/foods/import", {
+        method: "POST",
+        body: JSON.stringify(result),
+      });
+      setSelectedVia("search");
+      setSelectedFood(food);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Import failed");
+    } finally {
+      setImportingIndex(null);
+    }
   }
 
   async function logSelected(quantity: number) {
@@ -423,33 +450,76 @@ export function AddFoodSheet({
               />
               {searching ? (
                 <ListSkeleton rows={3} />
-              ) : results.length > 0 ? (
-                <div className="stagger-children divide-y rounded-xl border">
-                  {results.map((food) => (
-                    <FoodRow
-                      key={food.id}
-                      food={food}
-                      onSelect={(f) => {
-                        setSelectedVia("search");
-                        setSelectedFood(f);
-                      }}
-                    />
-                  ))}
-                </div>
-              ) : query.trim().length >= 2 ? (
-                <EmptyState
-                  title="No matches"
-                  body="Try a different name, or add it to the shared database."
-                  action={
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href="/foods/new">Create food</Link>
-                    </Button>
-                  }
-                />
               ) : (
-                <p className="px-1 py-6 text-center text-sm text-muted-foreground">
-                  Search the shared database, verified store items, and your foods
-                </p>
+                <>
+                  {results.length > 0 ? (
+                    <div className="stagger-children divide-y rounded-xl border">
+                      {results.map((food) => (
+                        <FoodRow
+                          key={food.id}
+                          food={food}
+                          onSelect={(f) => {
+                            setSelectedVia("search");
+                            setSelectedFood(f);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {externalResults.length > 0 ? (
+                    <div className="space-y-1.5 pt-1">
+                      <p className="px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                        From the web
+                      </p>
+                      <div className="stagger-children divide-y rounded-xl border">
+                        {externalResults.map((result, index) => (
+                          <button
+                            key={`${result.source}-${result.barcode ?? index}`}
+                            type="button"
+                            disabled={importingIndex !== null}
+                            onClick={() => importExternal(result, index)}
+                            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-muted disabled:opacity-60"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium">
+                                {result.name}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {result.brandName ? `${result.brandName} · ` : ""}
+                                {result.servingSizeValue} {result.servingSizeUnit} ·{" "}
+                                {result.source === "usda" ? "USDA" : "Open Food Facts"}
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                              {importingIndex === index
+                                ? "Adding..."
+                                : `${Math.round(result.calories)} kcal`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {results.length === 0 && externalResults.length === 0 ? (
+                    query.trim().length >= 2 ? (
+                      <EmptyState
+                        title="No matches"
+                        body="Try a different name, or add it to the shared database."
+                        action={
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href="/foods/new">Create food</Link>
+                          </Button>
+                        }
+                      />
+                    ) : (
+                      <p className="px-1 py-6 text-center text-sm text-muted-foreground">
+                        Search the shared database, verified store items, and your foods
+                      </p>
+                    )
+                  ) : null}
+                </>
               )}
             </TabsContent>
 

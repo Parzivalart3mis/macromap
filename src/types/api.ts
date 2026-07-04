@@ -121,6 +121,26 @@ export interface SavedMealDTO {
   createdAt: string;
 }
 
+export interface ExternalFoodResultDTO {
+  source: "usda" | "open_food_facts";
+  name: string;
+  brandName: string | null;
+  barcode: string | null;
+  servingSizeValue: number;
+  servingSizeUnit: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fiberG?: number;
+  sugarG?: number;
+  satFatG?: number;
+  sodiumMg?: number;
+  cholesterolMg?: number;
+  potassiumMg?: number;
+  transFatG?: number;
+}
+
 export interface NaturalLogSuggestionDTO {
   inputName: string;
   quantity: number;

@@ -4,7 +4,12 @@ import { db } from "@/lib/db";
 import { foodEditHistory, foods, type Food } from "@/lib/db/schema";
 
 export const DUPLICATE_SIMILARITY_THRESHOLD = 0.4;
-export const SEARCH_SIMILARITY_THRESHOLD = 0.15;
+/**
+ * word_similarity cutoff for fuzzy fallback matches. High on purpose: at 0.15
+ * a search for "bread" surfaced "Chicken Breast" (they share most trigrams).
+ * 0.55 still catches typos ("chiken" -> "chicken") without cross-word noise.
+ */
+export const SEARCH_WORD_SIMILARITY_THRESHOLD = 0.55;
 
 const searchTarget = sql`(${foods.name} || ' ' || coalesce(${foods.brandName}, ''))`;
 
@@ -36,17 +41,22 @@ export async function findSimilarFoods(
 }
 
 export async function searchFoods(query: string, limit = 25): Promise<Food[]> {
-  const score = sql<number>`similarity(${searchTarget}, ${query})`;
+  // Relevance first: a hit in the food's NAME beats a hit in its brand
+  // ("bread" should list breads before every Panera Bread dish), literal
+  // substrings beat fuzzy ones, and the verified badge only breaks ties.
+  const nameMatch = sql<number>`case when ${foods.name} ilike ${"%" + query + "%"} then 1 else 0 end`;
+  const substrMatch = sql<number>`case when ${searchTarget} ilike ${"%" + query + "%"} then 1 else 0 end`;
+  const wordScore = sql<number>`word_similarity(${query}, ${searchTarget})`;
   const rows = await db
     .select()
     .from(foods)
     .where(
       or(
         ilike(sql`${searchTarget}`, `%${query}%`),
-        gt(score, SEARCH_SIMILARITY_THRESHOLD),
+        gt(wordScore, SEARCH_WORD_SIMILARITY_THRESHOLD),
       ),
     )
-    .orderBy(desc(foods.isVerified), desc(score))
+    .orderBy(desc(nameMatch), desc(substrMatch), desc(wordScore), desc(foods.isVerified))
     .limit(limit);
   return rows;
 }
