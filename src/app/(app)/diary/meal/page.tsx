@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
 import { EntryEditDialog } from "@/components/diary/entry-edit-dialog";
+import { SwipeableRow } from "@/components/diary/swipeable-row";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -224,6 +225,7 @@ function MealDetail() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<DiaryEntryDTO | null>(null);
   const [copying, setCopying] = useState<"from" | "to" | null>(null);
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
@@ -265,6 +267,50 @@ function MealDetail() {
       toast.success("Meal saved as template");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Save failed");
+    }
+  }
+
+  async function deleteEntry(entry: DiaryEntryDTO) {
+    // Hide immediately so the swipe-out is not undone by the reload.
+    setHidden((prev) => new Set(prev).add(entry.id));
+    try {
+      await apiFetch(`/api/diary/entries/${entry.id}`, { method: "DELETE" });
+      toast.success(`Removed ${entry.nutritionSnapshotJson.label}`, {
+        action:
+          entry.foodId || entry.customStoreOrderId
+            ? {
+                label: "Undo",
+                onClick: async () => {
+                  try {
+                    await apiFetch("/api/diary/entries", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        date,
+                        mealName: meal.mealName,
+                        foodId: entry.foodId ?? undefined,
+                        customStoreOrderId: entry.customStoreOrderId ?? undefined,
+                        quantity: entry.quantity,
+                        servingMultiplier: entry.servingMultiplier,
+                        loggedVia: entry.loggedVia,
+                      }),
+                    });
+                    load();
+                  } catch {
+                    toast.error("Could not restore the entry");
+                  }
+                },
+              }
+            : undefined,
+      });
+    } catch (error) {
+      setHidden((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.id);
+        return next;
+      });
+      toast.error(error instanceof Error ? error.message : "Delete failed");
+    } finally {
+      load();
     }
   }
 
@@ -383,29 +429,40 @@ function MealDetail() {
             />
           ) : (
             <div className="stagger-children space-y-2">
-              {meal.entries.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => setEditing(entry)}
-                  className="card-lift diary-row flex w-full items-center gap-3 rounded-2xl border bg-card p-4 text-left shadow-[var(--shadow-soft)]"
-                >
-                  <span className="diary-entry-text min-w-0 flex-1">
-                    <span className="block truncate font-semibold">
-                      {entry.nutritionSnapshotJson.label}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {entry.quantity !== 1 ? `${entry.quantity} servings` : "1 serving"}
-                    </span>
-                    <span className="block text-sm tabular-nums text-muted-foreground">
-                      {Math.round(entry.nutritionSnapshotJson.calories)} cal
-                    </span>
-                  </span>
-                  <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-                </button>
-              ))}
+              {meal.entries
+                .filter((entry) => !hidden.has(entry.id))
+                .map((entry) => (
+                  <SwipeableRow key={entry.id} onDelete={() => deleteEntry(entry)}>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(entry)}
+                      className="diary-row flex w-full items-center gap-3 rounded-2xl border bg-card p-4 text-left shadow-[var(--shadow-soft)]"
+                    >
+                      <span className="diary-entry-text min-w-0 flex-1">
+                        <span className="block truncate font-semibold">
+                          {entry.nutritionSnapshotJson.label}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {entry.quantity !== 1 ? `${entry.quantity} servings` : "1 serving"}
+                        </span>
+                        <span className="block text-sm tabular-nums text-muted-foreground">
+                          {Math.round(entry.nutritionSnapshotJson.calories)} cal
+                        </span>
+                      </span>
+                      <ChevronRight
+                        className="size-5 shrink-0 text-muted-foreground"
+                        aria-hidden
+                      />
+                    </button>
+                  </SwipeableRow>
+                ))}
             </div>
           )}
+          {meal.entries.length > 0 ? (
+            <p className="text-center text-xs text-muted-foreground">
+              Swipe an item left or right to remove it
+            </p>
+          ) : null}
 
           <Button size="lg" className="w-full" asChild>
             <Link href={`/diary/add?date=${date}&meal=${encodeURIComponent(mealName)}`}>
