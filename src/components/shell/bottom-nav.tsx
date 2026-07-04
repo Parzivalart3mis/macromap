@@ -1,17 +1,18 @@
 "use client";
 
-import { Ellipsis, NotebookPen, Store, Timer, TrendingUp } from "lucide-react";
+import { Ellipsis, NotebookPen, Timer, TrendingUp, Utensils } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { href: "/diary", label: "Diary", icon: NotebookPen },
-  { href: "/stores", label: "Stores", icon: Store },
-  { href: "/progress", label: "Progress", icon: TrendingUp },
-  { href: "/fasting", label: "Fasting", icon: Timer },
-  { href: "/more", label: "More", icon: Ellipsis },
+  { href: "/diary", label: "Diary", icon: NotebookPen, match: ["/diary"] },
+  // Food covers the create-food flow and the store pages that live under it.
+  { href: "/food", label: "Food", icon: Utensils, match: ["/food", "/foods", "/stores"] },
+  { href: "/progress", label: "Progress", icon: TrendingUp, match: ["/progress"] },
+  { href: "/fasting", label: "Fasting", icon: Timer, match: ["/fasting"] },
+  { href: "/more", label: "More", icon: Ellipsis, match: ["/more"] },
 ] as const;
 
 export function BottomNav() {
@@ -23,7 +24,9 @@ export function BottomNav() {
     >
       <div className="mx-auto flex max-w-2xl items-stretch justify-around">
         {TABS.map((tab) => {
-          const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+          const active = tab.match.some(
+            (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+          );
           return (
             <Link
               key={tab.href}

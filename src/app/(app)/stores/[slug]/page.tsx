@@ -138,8 +138,8 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
       <header className="store-header app-chrome sticky top-0 z-30 bg-[var(--store-primary)] px-4 pb-3 text-[var(--store-on-primary)]">
         <div className="flex items-center gap-2 pt-1">
           <Link
-            href="/stores"
-            aria-label="Back to stores"
+            href="/food"
+            aria-label="Back to food"
             className="flex size-11 items-center justify-center rounded-md hover:bg-white/10"
           >
             <ArrowLeft className="size-5" aria-hidden />
