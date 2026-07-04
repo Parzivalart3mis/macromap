@@ -1,13 +1,13 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 
 import type { DiaryPayload } from "@/lib/diary/service";
 
 /**
- * "Analyze my day" — uses OpenAI when configured, otherwise falls back to
+ * "Analyze my day" — uses Gemini when configured, otherwise falls back to
  * deterministic rule-based insights so the feature works without a key.
  */
 export async function analyzeDiaryDay(payload: DiaryPayload): Promise<string[]> {
-  if (process.env.OPENAI_API_KEY) {
+  if (process.env.GEMINI_API_KEY) {
     try {
       return await aiInsights(payload);
     } catch {
@@ -18,33 +18,26 @@ export async function analyzeDiaryDay(payload: DiaryPayload): Promise<string[]> 
 }
 
 async function aiInsights(payload: DiaryPayload): Promise<string[]> {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const completion = await client.chat.completions.create({
-    model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    temperature: 0.3,
-    messages: [
-      {
-        role: "system",
-        content:
-          'You are a pragmatic nutrition coach. Given a day\'s diary totals, per-meal breakdown, and goals, return 3 to 5 short, specific, actionable observations. No exclamation marks. Respond with JSON: {"insights": string[]}',
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          totals: payload.totals,
-          goal: payload.goal,
-          meals: payload.meals.map((meal) => ({
-            name: meal.mealName,
-            totals: meal.totals,
-            items: meal.entries.map((entry) => entry.nutritionSnapshotJson.label),
-          })),
-        }),
-      },
-    ],
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const response = await ai.models.generateContent({
+    model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+    contents: JSON.stringify({
+      totals: payload.totals,
+      goal: payload.goal,
+      meals: payload.meals.map((meal) => ({
+        name: meal.mealName,
+        totals: meal.totals,
+        items: meal.entries.map((entry) => entry.nutritionSnapshotJson.label),
+      })),
+    }),
+    config: {
+      systemInstruction:
+        'You are a pragmatic nutrition coach. Given a day\'s diary totals, per-meal breakdown, and goals, return 3 to 5 short, specific, actionable observations. No exclamation marks. Respond with JSON only: {"insights": string[]}',
+      responseMimeType: "application/json",
+      temperature: 0.3,
+    },
   });
-  const raw = completion.choices[0]?.message?.content;
-  const parsed = JSON.parse(raw ?? "{}") as { insights?: unknown };
+  const parsed = JSON.parse(response.text ?? "{}") as { insights?: unknown };
   if (
     !Array.isArray(parsed.insights) ||
     !parsed.insights.every((i) => typeof i === "string")

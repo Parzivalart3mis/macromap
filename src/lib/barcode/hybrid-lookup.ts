@@ -32,9 +32,9 @@ interface ExternalFood {
 }
 
 /**
- * Resolution order: local DB -> Open Food Facts -> commercial API (Nutritionix,
- * enabled when BARCODE_API_KEY is "appId:appKey") -> not_found (caller offers
- * manual entry). External hits are persisted as shared foods.
+ * Resolution order: local DB -> Open Food Facts -> USDA FoodData Central
+ * (enabled when BARCODE_API_KEY holds an api.data.gov key) -> not_found
+ * (caller offers manual entry). External hits are persisted as shared foods.
  */
 export async function hybridBarcodeLookup(barcode: string): Promise<BarcodeLookupResult> {
   const [local] = await db.select().from(foods).where(eq(foods.barcode, barcode)).limit(1);
@@ -138,52 +138,71 @@ async function lookupOpenFoodFacts(barcode: string): Promise<ExternalFood | null
   }
 }
 
+interface FdcSearchFood {
+  description?: string;
+  brandOwner?: string;
+  brandName?: string;
+  gtinUpc?: string;
+  servingSize?: number;
+  servingSizeUnit?: string;
+  foodNutrients?: Array<{
+    nutrientName?: string;
+    unitName?: string;
+    value?: number;
+  }>;
+}
+
+function fdcNutrient(food: FdcSearchFood, ...names: string[]): number | undefined {
+  for (const name of names) {
+    const hit = food.foodNutrients?.find(
+      (n) => n.nutrientName?.toLowerCase() === name.toLowerCase() && n.value != null,
+    );
+    if (hit) return hit.value;
+  }
+  return undefined;
+}
+
+/** USDA FoodData Central branded-foods lookup by GTIN/UPC. Values are per 100g. */
 async function lookupCommercial(barcode: string): Promise<ExternalFood | null> {
   const key = process.env.BARCODE_API_KEY;
-  if (!key || !key.includes(":")) return null;
-  const [appId, appKey] = key.split(":");
+  if (!key) return null;
   try {
     const res = await fetch(
-      `https://trackapi.nutritionix.com/v2/search/item?upc=${encodeURIComponent(barcode)}`,
-      { headers: { "x-app-id": appId, "x-app-key": appKey } },
+      `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(key)}&query=${encodeURIComponent(barcode)}&dataType=Branded&pageSize=5`,
     );
     if (!res.ok) return null;
-    const data = (await res.json()) as {
-      foods?: Array<{
-        food_name?: string;
-        brand_name?: string;
-        serving_qty?: number;
-        serving_unit?: string;
-        nf_calories?: number;
-        nf_protein?: number;
-        nf_total_carbohydrate?: number;
-        nf_total_fat?: number;
-        nf_dietary_fiber?: number;
-        nf_sugars?: number;
-        nf_saturated_fat?: number;
-        nf_sodium?: number;
-        nf_cholesterol?: number;
-        nf_potassium?: number;
-      }>;
-    };
-    const item = data.foods?.[0];
-    if (!item?.food_name || item.nf_calories == null) return null;
+    const data = (await res.json()) as { foods?: FdcSearchFood[] };
+    // GTINs are zero-padded inconsistently across sources — compare trimmed.
+    const normalized = barcode.replace(/^0+/, "");
+    const item = data.foods?.find(
+      (food) => food.gtinUpc?.replace(/^0+/, "") === normalized,
+    );
+    if (!item?.description) return null;
+    const calories = fdcNutrient(item, "Energy");
+    if (calories == null) return null;
+
     const food: ExternalFood = {
-      name: item.food_name,
-      brandName: item.brand_name ?? null,
-      servingSizeValue: item.serving_qty ?? 1,
-      servingSizeUnit: item.serving_unit ?? "serving",
-      calories: item.nf_calories,
-      proteinG: item.nf_protein ?? 0,
-      carbsG: item.nf_total_carbohydrate ?? 0,
-      fatG: item.nf_total_fat ?? 0,
+      name: item.description,
+      brandName: item.brandName ?? item.brandOwner ?? null,
+      servingSizeValue: 100,
+      servingSizeUnit: "g",
+      calories,
+      proteinG: fdcNutrient(item, "Protein") ?? 0,
+      carbsG: fdcNutrient(item, "Carbohydrate, by difference") ?? 0,
+      fatG: fdcNutrient(item, "Total lipid (fat)") ?? 0,
     };
-    if (item.nf_dietary_fiber != null) food.fiberG = item.nf_dietary_fiber;
-    if (item.nf_sugars != null) food.sugarG = item.nf_sugars;
-    if (item.nf_saturated_fat != null) food.satFatG = item.nf_saturated_fat;
-    if (item.nf_sodium != null) food.sodiumMg = item.nf_sodium;
-    if (item.nf_cholesterol != null) food.cholesterolMg = item.nf_cholesterol;
-    if (item.nf_potassium != null) food.potassiumMg = item.nf_potassium;
+    const fiber = fdcNutrient(item, "Fiber, total dietary");
+    if (fiber != null) food.fiberG = fiber;
+    const sugar = fdcNutrient(item, "Sugars, total including NLEA", "Total Sugars");
+    if (sugar != null) food.sugarG = sugar;
+    const satFat = fdcNutrient(item, "Fatty acids, total saturated");
+    if (satFat != null) food.satFatG = satFat;
+    const sodium = fdcNutrient(item, "Sodium, Na");
+    if (sodium != null) food.sodiumMg = sodium;
+    const cholesterol = fdcNutrient(item, "Cholesterol");
+    if (cholesterol != null) food.cholesterolMg = cholesterol;
+    const potassium = fdcNutrient(item, "Potassium, K");
+    if (potassium != null) food.potassiumMg = potassium;
     return food;
   } catch {
     return null;

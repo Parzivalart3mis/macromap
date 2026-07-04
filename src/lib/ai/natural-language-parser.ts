@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
 import { ApiError } from "@/lib/api";
@@ -41,34 +41,34 @@ Rules:
 - quantity is the count of servings the user ate (default 1). Put size words like "footlong" or "large" into the name.
 - If the food is from a chain (Subway, McDonald's, Starbucks...) put the chain in brand.
 - estimatedNutrition is your best estimate for the TOTAL of that line (all quantity units combined) and is required.
-Respond with JSON: {"items":[{"name":string,"brand":string|null,"quantity":number,"unit":string|null,"estimatedNutrition":{"calories":number,"proteinG":number,"carbsG":number,"fatG":number}}]}`;
+Respond with JSON only: {"items":[{"name":string,"brand":string|null,"quantity":number,"unit":string|null,"estimatedNutrition":{"calories":number,"proteinG":number,"carbsG":number,"fatG":number}}]}`;
 
-let client: OpenAI | null = null;
+let client: GoogleGenAI | null = null;
 
-function getClient(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) {
+function getClient(): GoogleGenAI {
+  if (!process.env.GEMINI_API_KEY) {
     throw new ApiError(
       "ai_unavailable",
       "Natural-language logging is not configured",
       503,
     );
   }
-  client ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  client ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   return client;
 }
 
 export async function parseNaturalLogText(text: string): Promise<ParsedFoodItem[]> {
-  const openai = getClient();
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    temperature: 0,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: text },
-    ],
+  const ai = getClient();
+  const response = await ai.models.generateContent({
+    model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+    contents: text,
+    config: {
+      systemInstruction: SYSTEM_PROMPT,
+      responseMimeType: "application/json",
+      temperature: 0,
+    },
   });
-  const raw = completion.choices[0]?.message?.content;
+  const raw = response.text;
   if (!raw) throw new ApiError("ai_error", "The parser returned no output", 502);
   let json: unknown;
   try {
