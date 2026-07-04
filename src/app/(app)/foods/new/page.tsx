@@ -192,7 +192,7 @@ function NewFoodForm() {
           if (!open) setDuplicates(null);
         }}
       >
-        <SheetContent side="bottom" className="rounded-t-2xl">
+        <SheetContent side="bottom" className="sheet-safe-bottom rounded-t-2xl">
           <SheetHeader>
             <SheetTitle>Similar foods already exist</SheetTitle>
             <SheetDescription>

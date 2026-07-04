@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
 import { addDaysISO, formatDisplayDate, todayISO } from "@/lib/dates";
-import type { DiaryMealDTO, DiaryPayloadDTO } from "@/types/api";
+import type { DiaryMealDTO, DiaryPayloadDTO, StreakDTO } from "@/types/api";
 
 const DEFAULT_MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"];
 
@@ -45,6 +45,7 @@ function mergedMeals(payload: DiaryPayloadDTO): DiaryMealDTO[] {
 export default function DiaryPage() {
   const [date, setDate] = useState(todayISO());
   const [payload, setPayload] = useState<DiaryPayloadDTO | null>(null);
+  const [streak, setStreak] = useState<StreakDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [addTarget, setAddTarget] = useState<string | null>(null);
   const [newMealOpen, setNewMealOpen] = useState(false);
@@ -54,8 +55,14 @@ export default function DiaryPage() {
 
   const load = useCallback(async (target: string) => {
     try {
-      const data = await apiFetch<DiaryPayloadDTO>(`/api/diary?date=${target}`);
+      const [data, streakData] = await Promise.all([
+        apiFetch<DiaryPayloadDTO>(`/api/diary?date=${target}`),
+        apiFetch<{ streak: StreakDTO }>(`/api/progress/streak?today=${todayISO()}`).catch(
+          () => null,
+        ),
+      ]);
       setPayload(data);
+      if (streakData) setStreak(streakData.streak);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the diary");
     }
@@ -139,7 +146,7 @@ export default function DiaryPage() {
         <ListSkeleton rows={5} />
       ) : (
         <div className="space-y-4 p-4">
-          <DaySummary payload={current} onAnalyze={analyze} />
+          <DaySummary payload={current} streak={streak} onAnalyze={analyze} />
           {mergedMeals(current).map((meal) => (
             <MealCard
               key={meal.id}

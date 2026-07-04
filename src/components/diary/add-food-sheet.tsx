@@ -363,7 +363,10 @@ export function AddFoodSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl">
+      <SheetContent
+        side="bottom"
+        className="sheet-safe-bottom max-h-[92dvh] overflow-y-auto rounded-t-2xl"
+      >
         <SheetHeader>
           <SheetTitle>Add to {mealName}</SheetTitle>
           <SheetDescription>Search, scan, speak, or type what you ate</SheetDescription>

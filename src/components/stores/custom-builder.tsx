@@ -203,7 +203,10 @@ export function CustomBuilder({
         </section>
       ))}
 
-      <div className="fixed inset-x-0 bottom-20 z-30 mx-auto max-w-2xl px-4">
+      <div
+        className="fixed inset-x-0 z-30 mx-auto max-w-2xl px-4"
+        style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+      >
         <div className="nutrition-panel rounded-xl border bg-card/95 p-3 shadow-lg backdrop-blur">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="font-semibold tabular-nums">

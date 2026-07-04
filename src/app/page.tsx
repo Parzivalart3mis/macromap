@@ -33,7 +33,13 @@ export default async function LandingPage() {
   if (userId) redirect("/diary");
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-10 px-6 py-16">
+    <main
+      className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-10 px-6"
+      style={{
+        paddingTop: "max(env(safe-area-inset-top), 4rem)",
+        paddingBottom: "max(env(safe-area-inset-bottom), 4rem)",
+      }}
+    >
       <div className="space-y-4 text-center">
         <div className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-primary text-3xl font-bold text-primary-foreground">
           M

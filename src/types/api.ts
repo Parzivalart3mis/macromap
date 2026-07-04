@@ -158,6 +158,12 @@ export interface GoalProfileDTO {
   }>;
 }
 
+export interface StreakDTO {
+  current: number;
+  longest: number;
+  todayLogged: boolean;
+}
+
 export interface ProgressOverviewDTO {
   today: { totals: NutritionSnapshot; goal: GoalDTO | null };
   calorieHistory: Array<{ date: string; calories: number; goal: number | null }>;

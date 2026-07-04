@@ -69,7 +69,11 @@ export default function RootLayout({
       <html lang="en" suppressHydrationWarning>
         <body className="antialiased">
           {children}
-          <Toaster position="top-center" />
+          <Toaster
+            position="top-center"
+            offset={{ top: "max(env(safe-area-inset-top), 16px)" }}
+            mobileOffset={{ top: "max(env(safe-area-inset-top), 16px)" }}
+          />
         </body>
       </html>
     </ClerkProvider>
