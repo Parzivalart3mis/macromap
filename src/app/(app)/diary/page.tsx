@@ -291,19 +291,19 @@ function DiaryHome() {
                 label="Carbs"
                 value={totals.carbsG}
                 target={goal?.carbsG ?? null}
-                colorVar="--chart-2"
+                colorVar="--macro-carbs"
               />
               <MiniMacro
                 label="Fat"
                 value={totals.fatG}
                 target={goal?.fatG ?? null}
-                colorVar="--chart-3"
+                colorVar="--macro-fat"
               />
               <MiniMacro
                 label="Protein"
                 value={totals.proteinG}
                 target={goal?.proteinG ?? null}
-                colorVar="--chart-1"
+                colorVar="--macro-protein"
               />
             </div>
           </Card>

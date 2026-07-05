@@ -298,9 +298,9 @@ function MealDetail() {
               <div className="flex flex-1 justify-around gap-2 text-center">
                 {(
                   [
-                    ["Carbs", totals.carbsG, totals.carbsG * 4, "--chart-2"],
-                    ["Fat", totals.fatG, totals.fatG * 9, "--chart-3"],
-                    ["Protein", totals.proteinG, totals.proteinG * 4, "--chart-1"],
+                    ["Carbs", totals.carbsG, totals.carbsG * 4, "--macro-carbs"],
+                    ["Fat", totals.fatG, totals.fatG * 9, "--macro-fat"],
+                    ["Protein", totals.proteinG, totals.proteinG * 4, "--macro-protein"],
                   ] as const
                 ).map(([label, grams, cal, colorVar]) => (
                   <div key={label}>

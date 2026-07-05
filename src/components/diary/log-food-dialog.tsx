@@ -129,9 +129,9 @@ function LogFoodBody({
         <div className="flex flex-1 justify-around gap-2 text-center">
           {(
             [
-              ["Carbs", nutrition.carbsG, nutrition.carbsG * 4, "--chart-2"],
-              ["Fat", nutrition.fatG, nutrition.fatG * 9, "--chart-3"],
-              ["Protein", nutrition.proteinG, nutrition.proteinG * 4, "--chart-1"],
+              ["Carbs", nutrition.carbsG, nutrition.carbsG * 4, "--macro-carbs"],
+              ["Fat", nutrition.fatG, nutrition.fatG * 9, "--macro-fat"],
+              ["Protein", nutrition.proteinG, nutrition.proteinG * 4, "--macro-protein"],
             ] as const
           ).map(([label, grams, cal, colorVar]) => (
             <div key={label}>

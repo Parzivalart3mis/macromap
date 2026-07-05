@@ -17,7 +17,7 @@ export function MacroMeter({
   value: number;
   target: number | null;
   unit?: string;
-  colorVar: "--chart-1" | "--chart-2" | "--chart-3";
+  colorVar: "--macro-carbs" | "--macro-fat" | "--macro-protein";
   tone?: "default" | "hero";
 }) {
   const pct = target && target > 0 ? Math.min(100, (value / target) * 100) : 0;

@@ -231,19 +231,19 @@ export default function ProgressPage() {
                   label="Protein"
                   value={overview.today.totals.proteinG}
                   target={overview.today.goal?.proteinG ?? null}
-                  colorVar="--chart-1"
+                  colorVar="--macro-protein"
                 />
                 <MacroMeter
                   label="Carbs"
                   value={overview.today.totals.carbsG}
                   target={overview.today.goal?.carbsG ?? null}
-                  colorVar="--chart-2"
+                  colorVar="--macro-carbs"
                 />
                 <MacroMeter
                   label="Fat"
                   value={overview.today.totals.fatG}
                   target={overview.today.goal?.fatG ?? null}
-                  colorVar="--chart-3"
+                  colorVar="--macro-fat"
                 />
               </div>
             </CardContent>

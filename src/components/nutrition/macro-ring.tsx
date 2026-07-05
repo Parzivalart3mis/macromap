@@ -27,9 +27,9 @@ export function MacroRing({
   const segments =
     macroCal > 0
       ? [
-          { color: "var(--chart-2)", fraction: carbsCal / macroCal },
-          { color: "var(--chart-3)", fraction: fatCal / macroCal },
-          { color: "var(--chart-1)", fraction: proteinCal / macroCal },
+          { color: "var(--macro-carbs)", fraction: carbsCal / macroCal },
+          { color: "var(--macro-fat)", fraction: fatCal / macroCal },
+          { color: "var(--macro-protein)", fraction: proteinCal / macroCal },
         ]
       : [];
 
