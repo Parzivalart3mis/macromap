@@ -266,6 +266,8 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
         }}
         onConfirm={logMenuItem}
         busy={logging}
+        mealName={defaultMealForNow()}
+        date={todayISO()}
       />
     </main>
   );

@@ -87,10 +87,10 @@ function QuickRow({
         className="min-w-0 flex-1 text-left"
       >
         <span className="flex items-center gap-1.5">
-          <span className="truncate font-medium">{title}</span>
+          <span className="truncate text-[15px] font-semibold">{title}</span>
           {verified ? <VerifiedBadge /> : null}
         </span>
-        <span className="text-sm text-muted-foreground">{subtitle}</span>
+        <span className="text-[13px] text-muted-foreground">{subtitle}</span>
       </button>
       <Button
         variant="secondary"
@@ -834,6 +834,8 @@ function AddFoodView() {
         }}
         onConfirm={confirmSelected}
         busy={logging}
+        mealName={mealName}
+        date={date}
       />
     </main>
   );
