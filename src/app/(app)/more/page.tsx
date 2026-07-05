@@ -35,7 +35,7 @@ const MENU: Array<{ icon: LucideIcon; label: string; href: string }> = [
   { icon: Timer, label: "Intermittent Fasting", href: "/fasting" },
   { icon: BarChart3, label: "Weight & Measurements", href: "/progress" },
   { icon: FileText, label: "My Weekly Report", href: "/more/reports" },
-  { icon: UtensilsCrossed, label: "My Meals & Foods", href: "/diary/add" },
+  { icon: UtensilsCrossed, label: "My Meals, Recipes & Foods", href: "/more/foods" },
   { icon: Store, label: "Chain Stores", href: "/food" },
   { icon: PlusCircle, label: "Create a Food", href: "/foods/new" },
 ];
