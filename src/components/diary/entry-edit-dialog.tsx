@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -131,28 +131,39 @@ export function EntryEditDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] gap-4 overflow-y-auto">
-        <DialogHeader className="flex-row items-start justify-between gap-2 space-y-0">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Edit Entry
-            </p>
-            <DialogTitle className="diary-entry-text pt-1 text-lg leading-snug">
-              {label}
-            </DialogTitle>
-            <DialogDescription>
-              {food?.brandName ?? (entry.customStoreOrderId ? "Custom build" : "Generic")}
-            </DialogDescription>
-          </div>
+      <DialogContent
+        showCloseButton={false}
+        className="max-h-[92dvh] gap-4 overflow-y-auto"
+      >
+        {/* MFP-style bar: back to dismiss (left), save (right) — one of each. */}
+        <div className="-mx-2 flex items-center justify-between gap-2">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close without saving"
+            onClick={() => onOpenChange(false)}
+          >
+            <ArrowLeft aria-hidden />
+          </Button>
+          <p className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+            Edit Entry
+          </p>
           <Button
             size="icon-sm"
             aria-label="Save changes"
             disabled={busy || !valid}
             onClick={save}
-            className="mr-5 shrink-0"
           >
             <Check aria-hidden />
           </Button>
+        </div>
+        <DialogHeader className="space-y-0">
+          <DialogTitle className="diary-entry-text text-lg leading-snug">
+            {label}
+          </DialogTitle>
+          <DialogDescription>
+            {food?.brandName ?? (entry.customStoreOrderId ? "Custom build" : "Generic")}
+          </DialogDescription>
         </DialogHeader>
 
         {/* Fields */}
