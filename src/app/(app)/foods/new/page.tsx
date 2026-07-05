@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -57,6 +58,7 @@ function NewFoodForm() {
   const searchParams = useSearchParams();
   const [name, setName] = useState("");
   const [brandName, setBrandName] = useState("");
+  const [description, setDescription] = useState("");
   const [servingValue, setServingValue] = useState("1");
   const [servingUnit, setServingUnit] = useState("serving");
   const [barcode, setBarcode] = useState(searchParams.get("barcode") ?? "");
@@ -72,6 +74,7 @@ function NewFoodForm() {
       forceCreate,
     };
     if (brandName.trim()) payload.brandName = brandName.trim();
+    if (description.trim()) payload.description = description.trim();
     if (barcode.trim()) payload.barcode = barcode.trim();
     for (const field of NUMBER_FIELDS) {
       const raw = numbers[field.key];
@@ -129,6 +132,17 @@ function NewFoodForm() {
             value={brandName}
             maxLength={100}
             onChange={(event) => setBrandName(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="food-description">Description (optional)</Label>
+          <Textarea
+            id="food-description"
+            value={description}
+            maxLength={500}
+            rows={2}
+            placeholder="Notes about this dish — recipe source, how you make it..."
+            onChange={(event) => setDescription(event.target.value)}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">

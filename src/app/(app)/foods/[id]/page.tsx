@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/client/fetcher";
 import type { FoodDTO } from "@/types/api";
 
@@ -65,6 +66,7 @@ function EditFoodDialog({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(food.name);
+  const [description, setDescription] = useState(food.description ?? "");
   const [values, setValues] = useState<Record<string, string>>(() => {
     const next: Record<string, string> = {};
     for (const field of EDIT_FIELDS) {
@@ -78,6 +80,9 @@ function EditFoodDialog({
   async function save() {
     const payload: Record<string, unknown> = {};
     if (name.trim() && name.trim() !== food.name) payload.name = name.trim();
+    if (description.trim() !== (food.description ?? "")) {
+      payload.description = description.trim() || null;
+    }
     for (const field of EDIT_FIELDS) {
       const raw = values[field.key];
       if (raw === "" || raw == null) continue;
@@ -124,6 +129,17 @@ function EditFoodDialog({
             value={name}
             maxLength={200}
             onChange={(event) => setName(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="edit-description">Description</Label>
+          <Textarea
+            id="edit-description"
+            value={description}
+            maxLength={500}
+            rows={2}
+            placeholder="Notes about this dish..."
+            onChange={(event) => setDescription(event.target.value)}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -209,6 +225,11 @@ export default function FoodDetailPage({
               {food.servingSizeValue} {food.servingSizeUnit} per serving
               {food.barcode ? ` · barcode ${food.barcode}` : ""}
             </p>
+            {food.description ? (
+              <p className="diary-entry-text mt-2 rounded-xl bg-muted/60 px-3 py-2 text-sm text-foreground/80">
+                {food.description}
+              </p>
+            ) : null}
           </div>
 
           <NutritionPanel

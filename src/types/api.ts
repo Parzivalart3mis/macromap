@@ -6,6 +6,7 @@ export interface FoodDTO {
   id: string;
   name: string;
   brandName: string | null;
+  description: string | null;
   sourceType: "official_store" | "barcode_api" | "open_food_facts" | "user_created";
   servingSizeValue: number;
   servingSizeUnit: string;

@@ -212,6 +212,11 @@ export function LogFoodDialog({
             {food.name}
           </DialogTitle>
           <DialogDescription>{food.brandName ?? "Generic"}</DialogDescription>
+          {food.description ? (
+            <p className="diary-entry-text rounded-xl bg-muted/60 px-3 py-2 text-left text-sm text-foreground/80">
+              {food.description}
+            </p>
+          ) : null}
         </DialogHeader>
         <LogFoodBody
           key={food.id}

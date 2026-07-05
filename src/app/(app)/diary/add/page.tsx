@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Mic,
   MicOff,
+  Pencil,
   PlusCircle,
   ScanBarcode,
   Search,
@@ -70,6 +71,7 @@ function QuickRow({
   busy,
   onOpen,
   onQuickLog,
+  editHref,
 }: {
   title: string;
   subtitle: string;
@@ -77,6 +79,7 @@ function QuickRow({
   busy: boolean;
   onOpen?: () => void;
   onQuickLog: () => void;
+  editHref?: string;
 }) {
   return (
     <div className="card-lift flex items-center gap-2 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]">
@@ -92,6 +95,19 @@ function QuickRow({
         </span>
         <span className="text-[13px] text-muted-foreground">{subtitle}</span>
       </button>
+      {editHref ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Edit ${title}`}
+          className="rounded-full text-muted-foreground"
+          asChild
+        >
+          <Link href={editHref}>
+            <Pencil className="size-4" aria-hidden />
+          </Link>
+        </Button>
+      ) : null}
       <Button
         variant="secondary"
         size="icon-sm"
@@ -815,6 +831,7 @@ function AddFoodView() {
                             setSelectedFood(food);
                           }}
                           onQuickLog={() => quickLog(food, 1)}
+                          editHref={`/foods/${food.id}`}
                         />
                       ))}
                     </div>

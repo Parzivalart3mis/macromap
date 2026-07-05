@@ -100,6 +100,7 @@ export async function getFoodById(id: string): Promise<Food | undefined> {
 export const EDITABLE_FOOD_FIELDS = [
   "name",
   "brandName",
+  "description",
   "servingSizeValue",
   "servingSizeUnit",
   "calories",

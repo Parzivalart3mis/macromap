@@ -93,6 +93,8 @@ export const foods = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
     brandName: text("brand_name"),
+    // Free-form notes ("less oil version, from mom's recipe").
+    description: text("description"),
     sourceType: foodSourceTypeEnum("source_type").notNull().default("user_created"),
     createdByUserId: text("created_by_user_id").references(() => users.id, {
       onDelete: "set null",

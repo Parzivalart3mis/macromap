@@ -27,6 +27,7 @@ export const nutritionFieldsSchema = z.object({
 export const createFoodSchema = nutritionFieldsSchema.extend({
   name: z.string().min(1).max(200),
   brandName: z.string().max(100).optional(),
+  description: z.string().max(500).optional(),
   servingSizeValue: z.number().positive(),
   servingSizeUnit: z.string().min(1).max(20),
   barcode: z.string().min(8).max(32).optional(),
@@ -38,6 +39,7 @@ export const updateFoodSchema = nutritionFieldsSchema
   .extend({
     name: z.string().min(1).max(200).optional(),
     brandName: z.string().max(100).nullable().optional(),
+    description: z.string().max(500).nullable().optional(),
     servingSizeValue: z.number().positive().optional(),
     servingSizeUnit: z.string().min(1).max(20).optional(),
   })
