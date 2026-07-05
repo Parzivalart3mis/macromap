@@ -171,6 +171,11 @@ async function main() {
       skipped++;
       continue;
     }
+    if (!record.calories || parseNumber(record.calories) == null) {
+      console.log(`- no nutrition data, skipping: ${name}`);
+      skipped++;
+      continue;
+    }
 
     const [existing] = await db
       .select({ id: schema.foods.id })
