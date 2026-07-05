@@ -401,6 +401,8 @@ function MealDetail() {
       {editing ? (
         <EntryEditDialog
           entry={editing}
+          mealName={mealName}
+          goal={payload?.goal ?? null}
           onOpenChange={(open) => {
             if (!open) setEditing(null);
           }}
