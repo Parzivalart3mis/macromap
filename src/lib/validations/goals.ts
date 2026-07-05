@@ -16,9 +16,13 @@ export const goalDaySchema = z.object({
   satFatGMax: z.number().nonnegative().optional(),
 });
 
-export const updateGoalProfileSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  days: z.array(goalDaySchema).length(7),
-});
+export const updateGoalProfileSchema = z
+  .object({
+    name: z.string().min(1).max(100).optional(),
+    days: z.array(goalDaySchema).length(7).optional(),
+  })
+  .refine((value) => value.name !== undefined || value.days !== undefined, {
+    message: "Provide a name or days to update",
+  });
 
 export type GoalDayInput = z.infer<typeof goalDaySchema>;

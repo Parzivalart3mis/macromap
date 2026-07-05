@@ -26,11 +26,6 @@ export async function PATCH(
     const profile = await requireOwnedProfile(userId, id);
     const input = await parseBody(request, updateGoalProfileSchema);
 
-    const seenDays = new Set(input.days.map((day) => day.dayOfWeek));
-    if (seenDays.size !== 7) {
-      throw new ApiError("invalid_request", "days must cover all 7 days of week", 400);
-    }
-
     if (input.name && input.name !== profile.name) {
       await db
         .update(goalProfiles)
@@ -38,11 +33,17 @@ export async function PATCH(
         .where(eq(goalProfiles.id, id));
     }
 
-    // neon-http has no transactions; replace is two sequential statements.
-    await db.delete(goalDays).where(eq(goalDays.goalProfileId, id));
-    await db
-      .insert(goalDays)
-      .values(input.days.map((day) => ({ goalProfileId: id, ...day })));
+    if (input.days) {
+      const seenDays = new Set(input.days.map((day) => day.dayOfWeek));
+      if (seenDays.size !== 7) {
+        throw new ApiError("invalid_request", "days must cover all 7 days of week", 400);
+      }
+      // neon-http has no transactions; replace is two sequential statements.
+      await db.delete(goalDays).where(eq(goalDays.goalProfileId, id));
+      await db
+        .insert(goalDays)
+        .values(input.days.map((day) => ({ goalProfileId: id, ...day })));
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

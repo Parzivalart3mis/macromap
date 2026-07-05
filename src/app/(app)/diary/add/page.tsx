@@ -3,6 +3,8 @@
 import {
   ArrowLeft,
   ChevronDown,
+  ChevronRight,
+  MapPin,
   Mic,
   MicOff,
   Pencil,
@@ -13,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ListSkeleton } from "@/components/async-states";
@@ -39,6 +41,7 @@ import type {
   FoodDTO,
   NaturalLogSuggestionDTO,
   SavedMealDTO,
+  StoreDTO,
 } from "@/types/api";
 
 const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"];
@@ -251,8 +254,9 @@ function AddFoodView() {
     return meal && meal.length <= 40 ? meal : "Snacks";
   });
 
-  // Search
-  const [query, setQuery] = useState("");
+  // Search state survives navigation (kept in the URL): coming back from a
+  // store or food page restores the query and its results.
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [results, setResults] = useState<FoodDTO[]>([]);
   const [externalResults, setExternalResults] = useState<ExternalFoodResultDTO[]>([]);
   const [importingIndex, setImportingIndex] = useState<number | null>(null);
@@ -284,6 +288,7 @@ function AddFoodView() {
   const [recent, setRecent] = useState<RecentItem[] | null>(null);
   const [savedMeals, setSavedMeals] = useState<SavedMealDTO[] | null>(null);
   const [myFoods, setMyFoods] = useState<FoodDTO[] | null>(null);
+  const [stores, setStores] = useState<StoreDTO[]>([]);
 
   useEffect(() => {
     apiFetch<{ recent: RecentItem[] }>("/api/diary/recent")
@@ -295,50 +300,81 @@ function AddFoodView() {
     apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine")
       .then((data) => setMyFoods(data.foods))
       .catch(() => setMyFoods([]));
+    apiFetch<{ stores: StoreDTO[] }>("/api/stores")
+      .then((data) => setStores(data.stores))
+      .catch(() => undefined);
+  }, []);
+
+  // Keep search + meal in the URL so back-navigation restores this exact view.
+  function syncUrl(nextQuery: string, nextMeal: string) {
+    const params = new URLSearchParams();
+    params.set("date", date);
+    params.set("meal", nextMeal);
+    if (nextQuery.trim()) params.set("q", nextQuery.trim());
+    router.replace(`/diary/add?${params.toString()}`, { scroll: false });
+  }
+
+  async function fetchResults(value: string) {
+    setSearching(true);
+    try {
+      const data = await apiFetch<{
+        foods: FoodDTO[];
+        external: ExternalFoodResultDTO[];
+      }>(`/api/foods/search?q=${encodeURIComponent(value.trim())}`);
+      setResults(data.foods);
+      setExternalResults(data.external ?? []);
+    } catch {
+      toast.error("Search failed");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  // Re-run a query restored from the URL on mount.
+  useEffect(() => {
+    const restored = searchParams.get("q") ?? "";
+    if (restored.trim().length >= 2) {
+      fetchResults(restored);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function runSearch(value: string) {
     setQuery(value);
+    syncUrl(value, mealName);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (value.trim().length < 2) {
       setResults([]);
       setExternalResults([]);
       return;
     }
-    searchTimer.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const data = await apiFetch<{
-          foods: FoodDTO[];
-          external: ExternalFoodResultDTO[];
-        }>(`/api/foods/search?q=${encodeURIComponent(value.trim())}`);
-        setResults(data.foods);
-        setExternalResults(data.external ?? []);
-      } catch {
-        toast.error("Search failed");
-      } finally {
-        setSearching(false);
-      }
-    }, 250);
+    searchTimer.current = setTimeout(() => fetchResults(value), 250);
   }
 
-  const logFood = useCallback(
-    async (food: FoodDTO, quantity: number, via: LoggedVia) => {
-      await apiFetch("/api/diary/entries", {
-        method: "POST",
-        body: JSON.stringify({
-          date,
-          mealName,
-          foodId: food.id,
-          quantity,
-          servingMultiplier: 1,
-          loggedVia: via,
-        }),
-      });
-      toast.success(`Logged to ${mealName}`);
-    },
-    [date, mealName],
-  );
+  // A store whose name matches the query gets a "browse the menu" card.
+  const matchedStore =
+    query.trim().length >= 3
+      ? stores.find((store) => {
+          const q = query.trim().toLowerCase();
+          const name = store.name.toLowerCase();
+          return name.includes(q) || q.includes(name);
+        })
+      : undefined;
+
+  async function logFood(food: FoodDTO, quantity: number, via: LoggedVia) {
+    await apiFetch("/api/diary/entries", {
+      method: "POST",
+      body: JSON.stringify({
+        date,
+        mealName,
+        foodId: food.id,
+        quantity,
+        servingMultiplier: 1,
+        loggedVia: via,
+      }),
+    });
+    toast.success(`Logged to ${mealName}`);
+  }
 
   async function quickLog(food: FoodDTO, quantity: number) {
     setQuickBusy(food.id);
@@ -380,7 +416,7 @@ function AddFoodView() {
     }
   }
 
-  const lookupBarcode = useCallback(async (code: string) => {
+  async function lookupBarcode(code: string) {
     setScanning(false);
     setLookingUp(true);
     setBarcodeMiss(null);
@@ -400,7 +436,7 @@ function AddFoodView() {
     } finally {
       setLookingUp(false);
     }
-  }, []);
+  }
 
   async function parseText(text: string, via: LoggedVia) {
     if (text.trim().length < 3) {
@@ -491,7 +527,13 @@ function AddFoodView() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center">
                 {MEALS.map((meal) => (
-                  <DropdownMenuItem key={meal} onSelect={() => setMealName(meal)}>
+                  <DropdownMenuItem
+                    key={meal}
+                    onSelect={() => {
+                      setMealName(meal);
+                      syncUrl(query, meal);
+                    }}
+                  >
                     {meal}
                   </DropdownMenuItem>
                 ))}
@@ -687,6 +729,34 @@ function AddFoodView() {
                 <ListSkeleton rows={4} />
               ) : (
                 <div className="space-y-4">
+                  {matchedStore ? (
+                    <Link
+                      href={`/stores/${matchedStore.slug}`}
+                      className="card-lift flex items-center gap-3 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]"
+                    >
+                      <span
+                        className="flex size-11 shrink-0 items-center justify-center rounded-xl text-white"
+                        style={{
+                          backgroundColor:
+                            matchedStore.theme?.primaryHex ?? "var(--primary)",
+                        }}
+                      >
+                        <MapPin className="size-5" aria-hidden />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[15px] font-semibold">
+                          {matchedStore.name} Menu
+                        </span>
+                        <span className="text-[13px] text-muted-foreground">
+                          Choose from {matchedStore.menuItemCount ?? 0} menu items
+                        </span>
+                      </span>
+                      <ChevronRight
+                        className="size-5 shrink-0 text-muted-foreground"
+                        aria-hidden
+                      />
+                    </Link>
+                  ) : null}
                   {results.length > 0 ? (
                     <div className="stagger-children space-y-2">
                       {results.map((food) => (
@@ -708,7 +778,7 @@ function AddFoodView() {
                   {externalResults.length > 0 ? (
                     <div className="space-y-2">
                       <p className="px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                        From the web
+                        Results from web
                       </p>
                       <div className="stagger-children space-y-2">
                         {externalResults.map((result, index) => (

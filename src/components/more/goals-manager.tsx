@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Plus } from "lucide-react";
+import { Check, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,6 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
 import type { GoalProfileDTO } from "@/types/api";
@@ -202,6 +208,41 @@ export function GoalsManager() {
     }
   }
 
+  async function rename(profile: GoalProfileDTO) {
+    const name = window.prompt("Profile name", profile.name)?.trim();
+    if (!name || name === profile.name) return;
+    setBusyId(profile.id);
+    try {
+      await apiFetch(`/api/goals/${profile.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+      });
+      toast.success("Profile renamed");
+      load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Rename failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function remove(profile: GoalProfileDTO) {
+    const confirmed = window.confirm(
+      `Delete "${profile.name}"?${profile.isActive ? " It is your active profile — your diary will show no targets until you activate another." : ""}`,
+    );
+    if (!confirmed) return;
+    setBusyId(profile.id);
+    try {
+      await apiFetch(`/api/goals/${profile.id}`, { method: "DELETE" });
+      toast.success(`Deleted ${profile.name}`);
+      load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Delete failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -249,6 +290,31 @@ export function GoalsManager() {
                     Activate
                   </Button>
                 ) : null}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Options for ${profile.name}`}
+                      disabled={busyId === profile.id}
+                    >
+                      <MoreHorizontal aria-hidden />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => rename(profile)}>
+                      <Pencil aria-hidden />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onSelect={() => remove(profile)}
+                    >
+                      <Trash2 aria-hidden />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </li>
             ))}
           </ul>

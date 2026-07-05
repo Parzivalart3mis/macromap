@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -181,10 +181,10 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
           ) : (
             <ul className="divide-y rounded-xl border bg-card">
               {menuByCategory.map((item) => (
-                <li key={item.id}>
+                <li key={item.id} className="flex items-center gap-1 pr-2">
                   <button
                     type="button"
-                    className="flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/50"
+                    className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/50"
                     onClick={() => setSelectedFood(item.food)}
                   >
                     <span className="min-w-0">
@@ -203,6 +203,17 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
                       {Math.round(item.food.calories)} kcal
                     </span>
                   </button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Edit ${item.food.name}`}
+                    className="shrink-0 text-muted-foreground"
+                    asChild
+                  >
+                    <Link href={`/foods/${item.food.id}`}>
+                      <Pencil className="size-4" aria-hidden />
+                    </Link>
+                  </Button>
                 </li>
               ))}
             </ul>

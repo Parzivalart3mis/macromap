@@ -87,6 +87,7 @@ export interface StoreDTO {
   slug: string;
   brandThemeKey: string;
   theme: StoreThemeDTO | null;
+  menuItemCount?: number;
 }
 
 export interface StoreMenuItemDTO {
