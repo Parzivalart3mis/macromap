@@ -44,7 +44,7 @@ export interface DiaryEntryDTO {
   quantity: number;
   servingMultiplier: number;
   loggedVia: string;
-  nutritionSnapshotJson: NutritionSnapshot & { label: string };
+  nutritionSnapshotJson: NutritionSnapshot & { label: string; serving?: string };
   createdAt: string;
 }
 

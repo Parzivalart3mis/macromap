@@ -102,19 +102,22 @@ export function buildEntrySnapshot(
   source: EntrySource,
   quantity: number,
   servingMultiplier: number,
-): NutritionSnapshot & { label: string } {
+  servingText?: string,
+): NutritionSnapshot & { label: string; serving?: string } {
   const factor = quantity * servingMultiplier;
+  const serving = servingText?.trim() || undefined;
   if (source.food) {
     const base = foodToNutrition(source.food);
     const label = source.food.brandName
       ? `${source.food.name} (${source.food.brandName})`
       : source.food.name;
-    return { ...roundNutrition(scaleNutrition(base, factor)), label };
+    return { ...roundNutrition(scaleNutrition(base, factor)), label, serving };
   }
   if (source.order) {
     return {
       ...roundNutrition(scaleNutrition(source.order.nutritionSnapshotJson, factor)),
       label: source.order.name,
+      serving,
     };
   }
   throw new ApiError("invalid_request", "Entry source missing", 400);

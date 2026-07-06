@@ -23,7 +23,12 @@ export async function POST(request: Request) {
     const source = await resolveEntrySource(userId, input.foodId, input.customStoreOrderId);
     const day = await getOrCreateDiaryDay(userId, input.date);
     const meal = await getOrCreateMeal(day.id, input.mealName);
-    const snapshot = buildEntrySnapshot(source, input.quantity, input.servingMultiplier);
+    const snapshot = buildEntrySnapshot(
+      source,
+      input.quantity,
+      input.servingMultiplier,
+      input.servingText,
+    );
 
     const [entry] = await db
       .insert(diaryEntries)

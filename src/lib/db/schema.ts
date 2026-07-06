@@ -291,7 +291,7 @@ export const diaryEntries = pgTable(
     servingMultiplier: doublePrecision("serving_multiplier").notNull().default(1),
     loggedVia: loggedViaEnum("logged_via").notNull().default("search"),
     nutritionSnapshotJson: jsonb("nutrition_snapshot_json")
-      .$type<NutritionSnapshot & { label: string }>()
+      .$type<NutritionSnapshot & { label: string; serving?: string }>()
       .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

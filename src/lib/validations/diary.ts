@@ -10,6 +10,7 @@ export const createDiaryEntrySchema = z
     customStoreOrderId: z.uuid().optional(),
     quantity: z.number().positive(),
     servingMultiplier: z.number().positive().default(1),
+    servingText: z.string().max(60).optional(),
     loggedVia: z.enum([
       "search",
       "barcode",

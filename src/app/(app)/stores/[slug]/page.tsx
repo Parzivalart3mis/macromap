@@ -2,11 +2,11 @@
 
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
-import { LogFoodDialog } from "@/components/diary/log-food-dialog";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { CustomBuilder } from "@/components/stores/custom-builder";
 import { Button } from "@/components/ui/button";
@@ -31,14 +31,13 @@ interface StoreInfo {
 
 export default function StorePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const router = useRouter();
   const [info, setInfo] = useState<StoreInfo | null>(null);
   const [menu, setMenu] = useState<StoreMenuItemDTO[] | null>(null);
   const [ingredients, setIngredients] = useState<StoreIngredientDTO[] | null>(null);
   const [orders, setOrders] = useState<CustomStoreOrderDTO[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
-  const [selectedFood, setSelectedFood] = useState<FoodDTO | null>(null);
-  const [logging, setLogging] = useState(false);
   const [orderBusy, setOrderBusy] = useState<string | null>(null);
   const [tab, setTab] = useState("menu");
   const [editingOrder, setEditingOrder] = useState<CustomStoreOrderDTO | null>(null);
@@ -70,29 +69,14 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
     return menu.filter((item) => item.menuCategory === category);
   }, [menu, category]);
 
-  async function logMenuItem(quantity: number) {
-    if (!selectedFood) return;
-    setLogging(true);
-    const mealName = defaultMealForNow();
-    try {
-      await apiFetch("/api/diary/entries", {
-        method: "POST",
-        body: JSON.stringify({
-          date: todayISO(),
-          mealName,
-          foodId: selectedFood.id,
-          quantity,
-          servingMultiplier: 1,
-          loggedVia: "store_builder",
-        }),
-      });
-      toast.success(`Logged to ${mealName}`);
-      setSelectedFood(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Logging failed");
-    } finally {
-      setLogging(false);
-    }
+  function openLogFood(food: FoodDTO) {
+    const p = new URLSearchParams({
+      foodId: food.id,
+      date: todayISO(),
+      meal: defaultMealForNow(),
+      via: "store_builder",
+    });
+    router.push(`/diary/log?${p.toString()}`);
   }
 
   async function logOrder(order: CustomStoreOrderDTO) {
@@ -227,7 +211,7 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
                   <button
                     type="button"
                     className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/50"
-                    onClick={() => setSelectedFood(item.food)}
+                    onClick={() => openLogFood(item.food)}
                   >
                     <span className="min-w-0">
                       <span className="flex items-center gap-1.5">
@@ -344,18 +328,6 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
           )}
         </TabsContent>
       </Tabs>
-
-      <LogFoodDialog
-        food={selectedFood}
-        open={selectedFood !== null}
-        onOpenChange={(next) => {
-          if (!next) setSelectedFood(null);
-        }}
-        onConfirm={logMenuItem}
-        busy={logging}
-        mealName={defaultMealForNow()}
-        date={todayISO()}
-      />
     </main>
   );
 }

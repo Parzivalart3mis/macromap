@@ -370,7 +370,10 @@ function MealDetail() {
                           {entry.nutritionSnapshotJson.label}
                         </span>
                         <span className="text-[13px] text-muted-foreground">
-                          {entry.quantity !== 1 ? `${entry.quantity} servings` : "1 serving"}
+                          {entry.nutritionSnapshotJson.serving ??
+                            (entry.quantity !== 1
+                              ? `${entry.quantity} servings`
+                              : "1 serving")}
                           {" · "}
                           {Math.round(entry.nutritionSnapshotJson.calories)} cal
                         </span>

@@ -45,11 +45,17 @@ export async function PATCH(
       // the underlying shared food was edited since logging.
       const oldFactor = entry.quantity * entry.servingMultiplier;
       const newFactor = quantity * servingMultiplier;
-      const { label, ...nutrition } = entry.nutritionSnapshotJson;
+      const ratio = newFactor / oldFactor;
+      const { label, serving, ...nutrition } = entry.nutritionSnapshotJson;
       const rescaled = roundNutrition(
-        scaleNutrition(nutrition as NutritionSnapshot, newFactor / oldFactor),
+        scaleNutrition(nutrition as NutritionSnapshot, ratio),
       );
-      updates.nutritionSnapshotJson = { ...rescaled, label };
+      // Scale the "2 ml"-style serving text's amount to match the new quantity.
+      const nextServing = serving?.replace(
+        /^\s*([\d.]+)/,
+        (_, num: string) => `${Math.round(Number(num) * ratio * 100) / 100}`,
+      );
+      updates.nutritionSnapshotJson = { ...rescaled, label, serving: nextServing };
     }
 
     if (input.mealName) {

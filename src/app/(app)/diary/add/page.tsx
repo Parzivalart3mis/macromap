@@ -20,7 +20,6 @@ import { toast } from "sonner";
 
 import { EmptyState, ListSkeleton } from "@/components/async-states";
 import { BarcodeScanner, barcodeScanSupported } from "@/components/diary/barcode-scanner";
-import { LogFoodDialog } from "@/components/diary/log-food-dialog";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -269,11 +268,14 @@ function AddFoodView() {
   const [searching, setSearching] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Selection / logging
-  const [selectedFood, setSelectedFood] = useState<FoodDTO | null>(null);
-  const [selectedVia, setSelectedVia] = useState<LoggedVia>("search");
-  const [logging, setLogging] = useState(false);
+  // Logging
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
+
+  // Tapping a food opens the full-page log screen (with the unit selector).
+  function openLog(id: string, via: LoggedVia) {
+    const p = new URLSearchParams({ foodId: id, date, meal: mealName, via });
+    router.push(`/diary/log?${p.toString()}`);
+  }
 
   // Modes
   const [mode, setMode] = useState<Mode>(null);
@@ -393,19 +395,6 @@ function AddFoodView() {
     }
   }
 
-  async function confirmSelected(quantity: number) {
-    if (!selectedFood) return;
-    setLogging(true);
-    try {
-      await logFood(selectedFood, quantity, selectedVia);
-      setSelectedFood(null);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Logging failed");
-    } finally {
-      setLogging(false);
-    }
-  }
-
   async function importExternal(result: ExternalFoodResultDTO, index: number) {
     setImportingIndex(index);
     try {
@@ -413,8 +402,7 @@ function AddFoodView() {
         method: "POST",
         body: JSON.stringify(result),
       });
-      setSelectedVia("search");
-      setSelectedFood(food);
+      openLog(food.id, "search");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Import failed");
     } finally {
@@ -432,8 +420,7 @@ function AddFoodView() {
         { method: "POST", body: JSON.stringify({ barcode: code }) },
       );
       if (result.food) {
-        setSelectedVia("barcode");
-        setSelectedFood(result.food);
+        openLog(result.food.id, "barcode");
       } else {
         setBarcodeMiss(code);
       }
@@ -508,6 +495,150 @@ function AddFoodView() {
 
   const searchActive = query.trim().length >= 2;
 
+  const quickActionsRow = (
+    <div className="grid grid-cols-4 gap-2">
+      {QUICK_ACTIONS.map((action) => (
+        <button
+          key={action.key}
+          type="button"
+          onClick={action.onClick}
+          className={cn(
+            "card-lift flex flex-col items-center gap-1.5 rounded-2xl border bg-card px-1 py-3 text-xs font-semibold text-primary shadow-[var(--shadow-soft)]",
+            mode === action.key && "border-primary/50 bg-primary/5",
+          )}
+        >
+          <action.icon className="size-5" aria-hidden />
+          {action.label}
+        </button>
+      ))}
+      <Link
+        href={`/foods/new`}
+        className="card-lift flex flex-col items-center gap-1.5 rounded-2xl border bg-card px-1 py-3 text-xs font-semibold text-primary shadow-[var(--shadow-soft)]"
+      >
+        <PlusCircle className="size-5" aria-hidden />
+        Quick add
+      </Link>
+    </div>
+  );
+
+  const modePanels = (
+    <>
+      {mode === "barcode" ? (
+        <div className="animate-fade-up space-y-3">
+          {scanning ? (
+            <>
+              <BarcodeScanner
+                onDetected={(code) => {
+                  setBarcodeValue(code);
+                  lookupBarcode(code);
+                }}
+                onError={(message) => {
+                  toast.error(message);
+                  setScanning(false);
+                }}
+              />
+              <Button variant="outline" className="w-full" onClick={() => setScanning(false)}>
+                Stop scanning
+              </Button>
+            </>
+          ) : (
+            <>
+              {barcodeScanSupported() ? (
+                <Button variant="secondary" className="w-full" onClick={() => setScanning(true)}>
+                  <ScanBarcode data-icon="inline-start" aria-hidden />
+                  Scan with camera
+                </Button>
+              ) : null}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter barcode digits"
+                  inputMode="numeric"
+                  value={barcodeValue}
+                  onChange={(event) => setBarcodeValue(event.target.value.replace(/\D/g, ""))}
+                />
+                <Button
+                  disabled={barcodeValue.length < 8 || lookingUp}
+                  onClick={() => lookupBarcode(barcodeValue)}
+                >
+                  {lookingUp ? "Looking..." : "Look up"}
+                </Button>
+              </div>
+            </>
+          )}
+          {barcodeMiss ? (
+            <EmptyState
+              title="Barcode not found"
+              body="It is not in our database, Open Food Facts, or USDA."
+              action={
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/foods/new?barcode=${barcodeMiss}`}>Add it manually</Link>
+                </Button>
+              }
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      {mode === "voice" ? (
+        <div className="animate-fade-up space-y-3">
+          {voice.supported ? (
+            <>
+              <Button
+                variant={voice.listening ? "destructive" : "secondary"}
+                className="w-full"
+                onClick={voice.listening ? voice.stop : voice.start}
+              >
+                {voice.listening ? (
+                  <MicOff data-icon="inline-start" aria-hidden />
+                ) : (
+                  <Mic data-icon="inline-start" aria-hidden />
+                )}
+                {voice.listening ? "Stop listening" : "Start speaking"}
+              </Button>
+              <Textarea
+                placeholder="Your words appear here, edit before parsing"
+                value={voice.transcript}
+                onChange={(event) => voice.setTranscript(event.target.value)}
+                rows={3}
+              />
+              {voice.error ? <p className="text-sm text-destructive">{voice.error}</p> : null}
+              <Button
+                className="w-full"
+                disabled={parsing || voice.transcript.trim().length < 3}
+                onClick={() => parseText(voice.transcript, "voice")}
+              >
+                {parsing ? "Parsing..." : "Parse and review"}
+              </Button>
+            </>
+          ) : (
+            <EmptyState
+              title="Voice input not supported"
+              body="This browser does not support the Web Speech API. Use Describe instead."
+            />
+          )}
+        </div>
+      ) : null}
+
+      {mode === "text" ? (
+        <div className="animate-fade-up space-y-3">
+          <Textarea
+            placeholder='Try "2 eggs and a Subway footlong"'
+            value={freeText}
+            onChange={(event) => setFreeText(event.target.value)}
+            rows={3}
+          />
+          <Button
+            className="w-full"
+            disabled={parsing || freeText.trim().length < 3}
+            onClick={() => parseText(freeText, "natural_language")}
+          >
+            {parsing ? "Parsing..." : "Parse and review"}
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+
   return (
     <main>
       <header className="top-header app-chrome glass sticky top-0 z-30 border-b border-border/60 px-4 pb-3">
@@ -565,31 +696,6 @@ function AddFoodView() {
           />
         </div>
 
-        {/* Quick actions */}
-        <div className="grid grid-cols-4 gap-2">
-          {QUICK_ACTIONS.map((action) => (
-            <button
-              key={action.key}
-              type="button"
-              onClick={action.onClick}
-              className={cn(
-                "card-lift flex flex-col items-center gap-1.5 rounded-2xl border bg-card px-1 py-3 text-xs font-semibold text-primary shadow-[var(--shadow-soft)]",
-                mode === action.key && "border-primary/50 bg-primary/5",
-              )}
-            >
-              <action.icon className="size-5" aria-hidden />
-              {action.label}
-            </button>
-          ))}
-          <Link
-            href={`/foods/new`}
-            className="card-lift flex flex-col items-center gap-1.5 rounded-2xl border bg-card px-1 py-3 text-xs font-semibold text-primary shadow-[var(--shadow-soft)]"
-          >
-            <PlusCircle className="size-5" aria-hidden />
-            Quick add
-          </Link>
-        </div>
-
         {/* Natural-language review takes over when present */}
         {review ? (
           <>
@@ -612,124 +718,6 @@ function AddFoodView() {
           </>
         ) : (
           <>
-            {mode === "barcode" ? (
-              <div className="animate-fade-up space-y-3">
-                {scanning ? (
-                  <>
-                    <BarcodeScanner
-                      onDetected={(code) => {
-                        setBarcodeValue(code);
-                        lookupBarcode(code);
-                      }}
-                      onError={(message) => {
-                        toast.error(message);
-                        setScanning(false);
-                      }}
-                    />
-                    <Button variant="outline" className="w-full" onClick={() => setScanning(false)}>
-                      Stop scanning
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    {barcodeScanSupported() ? (
-                      <Button variant="secondary" className="w-full" onClick={() => setScanning(true)}>
-                        <ScanBarcode data-icon="inline-start" aria-hidden />
-                        Scan with camera
-                      </Button>
-                    ) : null}
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Enter barcode digits"
-                        inputMode="numeric"
-                        value={barcodeValue}
-                        onChange={(event) =>
-                          setBarcodeValue(event.target.value.replace(/\D/g, ""))
-                        }
-                      />
-                      <Button
-                        disabled={barcodeValue.length < 8 || lookingUp}
-                        onClick={() => lookupBarcode(barcodeValue)}
-                      >
-                        {lookingUp ? "Looking..." : "Look up"}
-                      </Button>
-                    </div>
-                  </>
-                )}
-                {barcodeMiss ? (
-                  <EmptyState
-                    title="Barcode not found"
-                    body="It is not in our database, Open Food Facts, or USDA."
-                    action={
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/foods/new?barcode=${barcodeMiss}`}>Add it manually</Link>
-                      </Button>
-                    }
-                  />
-                ) : null}
-              </div>
-            ) : null}
-
-            {mode === "voice" ? (
-              <div className="animate-fade-up space-y-3">
-                {voice.supported ? (
-                  <>
-                    <Button
-                      variant={voice.listening ? "destructive" : "secondary"}
-                      className="w-full"
-                      onClick={voice.listening ? voice.stop : voice.start}
-                    >
-                      {voice.listening ? (
-                        <MicOff data-icon="inline-start" aria-hidden />
-                      ) : (
-                        <Mic data-icon="inline-start" aria-hidden />
-                      )}
-                      {voice.listening ? "Stop listening" : "Start speaking"}
-                    </Button>
-                    <Textarea
-                      placeholder="Your words appear here, edit before parsing"
-                      value={voice.transcript}
-                      onChange={(event) => voice.setTranscript(event.target.value)}
-                      rows={3}
-                    />
-                    {voice.error ? (
-                      <p className="text-sm text-destructive">{voice.error}</p>
-                    ) : null}
-                    <Button
-                      className="w-full"
-                      disabled={parsing || voice.transcript.trim().length < 3}
-                      onClick={() => parseText(voice.transcript, "voice")}
-                    >
-                      {parsing ? "Parsing..." : "Parse and review"}
-                    </Button>
-                  </>
-                ) : (
-                  <EmptyState
-                    title="Voice input not supported"
-                    body="This browser does not support the Web Speech API. Use Describe instead."
-                  />
-                )}
-              </div>
-            ) : null}
-
-            {mode === "text" ? (
-              <div className="animate-fade-up space-y-3">
-                <Textarea
-                  placeholder='Try "2 eggs and a Subway footlong"'
-                  value={freeText}
-                  onChange={(event) => setFreeText(event.target.value)}
-                  rows={3}
-                />
-                <Button
-                  className="w-full"
-                  disabled={parsing || freeText.trim().length < 3}
-                  onClick={() => parseText(freeText, "natural_language")}
-                >
-                  {parsing ? "Parsing..." : "Parse and review"}
-                </Button>
-              </div>
-            ) : null}
-
             {searchActive ? (
               searching ? (
                 <ListSkeleton rows={4} />
@@ -773,10 +761,7 @@ function AddFoodView() {
                           description={food.description}
                           verified={food.isVerified}
                           busy={quickBusy === food.id}
-                          onOpen={() => {
-                            setSelectedVia("search");
-                            setSelectedFood(food);
-                          }}
+                          onOpen={() => openLog(food.id, "search")}
                           onQuickLog={() => quickLog(food, 1)}
                         />
                       ))}
@@ -843,10 +828,7 @@ function AddFoodView() {
                           description={food.description}
                           verified={food.isVerified}
                           busy={quickBusy === food.id}
-                          onOpen={() => {
-                            setSelectedVia("search");
-                            setSelectedFood(food);
-                          }}
+                          onOpen={() => openLog(food.id, "search")}
                           onQuickLog={() => quickLog(food, lastQuantity)}
                         />
                       ))}
@@ -905,10 +887,7 @@ function AddFoodView() {
                           description={food.description}
                           verified={food.isVerified}
                           busy={quickBusy === food.id}
-                          onOpen={() => {
-                            setSelectedVia("search");
-                            setSelectedFood(food);
-                          }}
+                          onOpen={() => openLog(food.id, "search")}
                           onQuickLog={() => quickLog(food, 1)}
                           editHref={`/foods/${food.id}`}
                         />
@@ -918,21 +897,13 @@ function AddFoodView() {
                 </TabsContent>
               </Tabs>
             )}
+
+            {/* Barcode / voice / describe / quick add — below the tabs */}
+            {quickActionsRow}
+            {modePanels}
           </>
         )}
       </div>
-
-      <LogFoodDialog
-        food={selectedFood}
-        open={selectedFood !== null}
-        onOpenChange={(next) => {
-          if (!next) setSelectedFood(null);
-        }}
-        onConfirm={confirmSelected}
-        busy={logging}
-        mealName={mealName}
-        date={date}
-      />
     </main>
   );
 }
