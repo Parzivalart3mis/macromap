@@ -68,6 +68,9 @@ function EditFoodDialog({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(food.name);
+  const [brandName, setBrandName] = useState(food.brandName ?? "");
+  const [servingValue, setServingValue] = useState(String(food.servingSizeValue));
+  const [servingUnit, setServingUnit] = useState(food.servingSizeUnit);
   const [description, setDescription] = useState(food.description ?? "");
   const [values, setValues] = useState<Record<string, string>>(() => {
     const next: Record<string, string> = {};
@@ -82,6 +85,16 @@ function EditFoodDialog({
   async function save() {
     const payload: Record<string, unknown> = {};
     if (name.trim() && name.trim() !== food.name) payload.name = name.trim();
+    if (brandName.trim() !== (food.brandName ?? "")) {
+      payload.brandName = brandName.trim() || null;
+    }
+    const serving = Number(servingValue);
+    if (Number.isFinite(serving) && serving > 0 && serving !== food.servingSizeValue) {
+      payload.servingSizeValue = serving;
+    }
+    if (servingUnit.trim() && servingUnit.trim() !== food.servingSizeUnit) {
+      payload.servingSizeUnit = servingUnit.trim();
+    }
     if (description.trim() !== (food.description ?? "")) {
       payload.description = description.trim() || null;
     }
@@ -132,6 +145,40 @@ function EditFoodDialog({
             maxLength={200}
             onChange={(event) => setName(event.target.value)}
           />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="edit-brand">Brand</Label>
+          <Input
+            id="edit-brand"
+            value={brandName}
+            maxLength={100}
+            placeholder="Optional, e.g. MyProtein"
+            onChange={(event) => setBrandName(event.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="edit-serving-value">Serving size</Label>
+            <Input
+              id="edit-serving-value"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="any"
+              value={servingValue}
+              onChange={(event) => setServingValue(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-serving-unit">Unit</Label>
+            <Input
+              id="edit-serving-unit"
+              value={servingUnit}
+              maxLength={20}
+              placeholder="g, ml, serving"
+              onChange={(event) => setServingUnit(event.target.value)}
+            />
+          </div>
         </div>
         <div className="space-y-1">
           <Label htmlFor="edit-description">Description</Label>
