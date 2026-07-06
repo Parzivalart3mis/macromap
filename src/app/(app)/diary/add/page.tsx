@@ -807,6 +807,10 @@ function AddFoodView() {
                   <TabsTrigger value="foods">My Foods</TabsTrigger>
                 </TabsList>
 
+                {/* Barcode / voice / describe / quick add — under the tabs */}
+                <div className="pt-3">{quickActionsRow}</div>
+                {modePanels}
+
                 <TabsContent value="history" className="pt-3">
                   <p className="mb-2 px-1 text-lg font-extrabold tracking-tight">
                     Recently logged
@@ -897,10 +901,6 @@ function AddFoodView() {
                 </TabsContent>
               </Tabs>
             )}
-
-            {/* Barcode / voice / describe / quick add — below the tabs */}
-            {quickActionsRow}
-            {modePanels}
           </>
         )}
       </div>
