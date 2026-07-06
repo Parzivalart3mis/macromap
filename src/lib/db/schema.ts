@@ -290,6 +290,8 @@ export const diaryEntries = pgTable(
     quantity: doublePrecision("quantity").notNull().default(1),
     servingMultiplier: doublePrecision("serving_multiplier").notNull().default(1),
     loggedVia: loggedViaEnum("logged_via").notNull().default("search"),
+    // Wall-clock time the food was eaten, "HH:MM" (user-picked, no timezone).
+    eatenTime: text("eaten_time"),
     nutritionSnapshotJson: jsonb("nutrition_snapshot_json")
       .$type<NutritionSnapshot & { label: string; serving?: string }>()
       .notNull(),

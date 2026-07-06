@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
+const timeString = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM");
 
 export const createDiaryEntrySchema = z
   .object({
@@ -11,6 +12,7 @@ export const createDiaryEntrySchema = z
     quantity: z.number().positive(),
     servingMultiplier: z.number().positive().default(1),
     servingText: z.string().max(60).optional(),
+    eatenTime: timeString.optional(),
     loggedVia: z.enum([
       "search",
       "barcode",
@@ -28,6 +30,7 @@ export const updateDiaryEntrySchema = z.object({
   quantity: z.number().positive().optional(),
   servingMultiplier: z.number().positive().optional(),
   mealName: z.string().min(1).max(40).optional(),
+  eatenTime: timeString.nullable().optional(),
 });
 
 export const createDiaryMealSchema = z.object({

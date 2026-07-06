@@ -29,6 +29,16 @@ export function formatDisplayDate(date: string): string {
   });
 }
 
+/** "14:05" → "2:05 PM"; passes through anything not HH:MM. */
+export function formatClock(hhmm: string): string {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(hhmm);
+  if (!match) return hhmm;
+  const hour = Number(match[1]);
+  const period = hour < 12 ? "AM" : "PM";
+  const twelve = hour % 12 === 0 ? 12 : hour % 12;
+  return `${twelve}:${match[2]} ${period}`;
+}
+
 /** Monday of the week containing the given date. */
 export function weekStartISO(date: string): string {
   const d = new Date(`${date}T12:00:00`);

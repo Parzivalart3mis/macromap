@@ -61,6 +61,7 @@ export function EntryEditDialog({
 }) {
   const [servings, setServings] = useState<string>(() => String(entry.quantity));
   const [targetMeal, setTargetMeal] = useState(mealName);
+  const [eatenTime, setEatenTime] = useState(entry.eatenTime ?? "");
   const [factsOpen, setFactsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [food, setFood] = useState<FoodDTO | null>(null);
@@ -98,6 +99,7 @@ export function EntryEditDialog({
       const changes: Record<string, unknown> = {};
       if (quantity !== entry.quantity) changes.quantity = quantity;
       if (targetMeal !== mealName) changes.mealName = targetMeal;
+      if (eatenTime !== (entry.eatenTime ?? "")) changes.eatenTime = eatenTime || null;
       if (Object.keys(changes).length > 0) {
         await apiFetch(`/api/diary/entries/${entry.id}`, {
           method: "PATCH",
@@ -206,6 +208,18 @@ export function EntryEditDialog({
                 "h-9 w-24 text-right font-semibold",
                 !valid && servings !== "" && "border-destructive",
               )}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <label htmlFor="edit-eaten-time" className="font-medium">
+              Time
+            </label>
+            <input
+              id="edit-eaten-time"
+              type="time"
+              value={eatenTime}
+              onChange={(event) => setEatenTime(event.target.value)}
+              className="rounded-lg border bg-transparent px-3 py-1.5 font-semibold text-primary"
             />
           </div>
           <div className="flex items-center justify-between gap-3 px-4 py-3">

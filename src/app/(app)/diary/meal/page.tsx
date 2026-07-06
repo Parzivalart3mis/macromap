@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
-import { addDaysISO, formatDisplayDate, todayISO } from "@/lib/dates";
+import { addDaysISO, formatClock, formatDisplayDate, todayISO } from "@/lib/dates";
 import type { DiaryEntryDTO, DiaryMealDTO, DiaryPayloadDTO } from "@/types/api";
 
 const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"];
@@ -370,6 +370,7 @@ function MealDetail() {
                           {entry.nutritionSnapshotJson.label}
                         </span>
                         <span className="text-[13px] text-muted-foreground">
+                          {entry.eatenTime ? `${formatClock(entry.eatenTime)} · ` : ""}
                           {entry.nutritionSnapshotJson.serving ??
                             (entry.quantity !== 1
                               ? `${entry.quantity} servings`

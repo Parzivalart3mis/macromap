@@ -1,0 +1,1 @@
+ALTER TABLE "diary_entries" ADD COLUMN "eaten_time" text;

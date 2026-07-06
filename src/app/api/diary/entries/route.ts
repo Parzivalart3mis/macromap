@@ -39,6 +39,7 @@ export async function POST(request: Request) {
         quantity: input.quantity,
         servingMultiplier: input.servingMultiplier,
         loggedVia: input.loggedVia,
+        eatenTime: input.eatenTime ?? null,
         nutritionSnapshotJson: snapshot,
       })
       .returning();

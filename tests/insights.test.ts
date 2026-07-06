@@ -68,6 +68,7 @@ describe("ruleBasedInsights", () => {
           quantity: 1,
           servingMultiplier: 1,
           loggedVia: "search" as const,
+          eatenTime: null,
           nutritionSnapshotJson: {
             label: "x",
             calories,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { addDaysISO, weekStartISO } from "@/lib/dates";
+import { addDaysISO, formatClock, weekStartISO } from "@/lib/dates";
 import { defaultMealForNow, readableTextOn } from "@/lib/store-theme";
 
 describe("addDaysISO", () => {
@@ -8,6 +8,20 @@ describe("addDaysISO", () => {
     expect(addDaysISO("2026-06-30", 1)).toBe("2026-07-01");
     expect(addDaysISO("2026-07-01", -1)).toBe("2026-06-30");
     expect(addDaysISO("2026-12-31", 1)).toBe("2027-01-01");
+  });
+});
+
+describe("formatClock", () => {
+  it("formats 24h HH:MM as 12h with period", () => {
+    expect(formatClock("00:05")).toBe("12:05 AM");
+    expect(formatClock("08:30")).toBe("8:30 AM");
+    expect(formatClock("12:00")).toBe("12:00 PM");
+    expect(formatClock("14:05")).toBe("2:05 PM");
+    expect(formatClock("23:59")).toBe("11:59 PM");
+  });
+
+  it("passes through non-time strings", () => {
+    expect(formatClock("nope")).toBe("nope");
   });
 });
 

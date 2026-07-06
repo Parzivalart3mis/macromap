@@ -58,6 +58,11 @@ function LogFoodView() {
   const [unitSheetOpen, setUnitSheetOpen] = useState(false);
   const [factsOpen, setFactsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Wall-clock time eaten, defaults to now.
+  const [eatenTime, setEatenTime] = useState(() => {
+    const n = new Date();
+    return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+  });
 
   useEffect(() => {
     if (!foodId) {
@@ -124,6 +129,7 @@ function LogFoodView() {
           quantity,
           servingMultiplier,
           servingText,
+          eatenTime,
           loggedVia: via,
         }),
       });
@@ -208,6 +214,18 @@ function LogFoodView() {
                 "h-9 w-24 text-right font-semibold",
                 !valid && servings !== "" && "border-destructive",
               )}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <label htmlFor="eaten-time" className="font-medium">
+              Time
+            </label>
+            <input
+              id="eaten-time"
+              type="time"
+              value={eatenTime}
+              onChange={(event) => setEatenTime(event.target.value)}
+              className="rounded-lg border bg-transparent px-3 py-1.5 font-semibold text-primary"
             />
           </div>
           <div className="flex items-center justify-between gap-3 px-4 py-3">

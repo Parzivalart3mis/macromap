@@ -40,6 +40,8 @@ export async function PATCH(
       servingMultiplier,
     };
 
+    if (input.eatenTime !== undefined) updates.eatenTime = input.eatenTime;
+
     if (input.quantity != null || input.servingMultiplier != null) {
       // Rescale from the stored snapshot so history stays immutable even if
       // the underlying shared food was edited since logging.
