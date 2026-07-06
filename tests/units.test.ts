@@ -41,6 +41,7 @@ function food(overrides: Partial<FoodDTO>): FoodDTO {
     vitaminDPct: null,
     barcode: null,
     isVerified: false,
+    isRecipe: false,
     logCount: 0,
     ...overrides,
   };

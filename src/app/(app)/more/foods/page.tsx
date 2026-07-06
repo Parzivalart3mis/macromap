@@ -144,10 +144,8 @@ export default function MyMealsRecipesFoodsPage() {
   const q = query.trim().toLowerCase();
   const matches = (name: string) => !q || name.toLowerCase().includes(q);
 
-  // "Recipes" = home dishes measured in servings; "Foods" = everything I created.
-  const recipes = (foods ?? []).filter(
-    (food) => food.servingSizeUnit.includes("serving") && matches(food.name),
-  );
+  // "Recipes" = foods explicitly flagged as recipes; "Foods" = everything I created.
+  const recipes = (foods ?? []).filter((food) => food.isRecipe && matches(food.name));
   const myFoods = (foods ?? []).filter((food) => matches(food.name));
   const meals = (savedMeals ?? []).filter((meal) => matches(meal.name));
 

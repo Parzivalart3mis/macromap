@@ -36,6 +36,13 @@
       "when": 1783347226659,
       "tag": "0004_diary-eaten-time",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783349431743,
+      "tag": "0005_food-is-recipe",
+      "breakpoints": true
     }
   ]
 }

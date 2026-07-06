@@ -33,6 +33,7 @@ export interface FoodDTO {
   vitaminDPct: number | null;
   barcode: string | null;
   isVerified: boolean;
+  isRecipe: boolean;
   logCount: number;
 }
 

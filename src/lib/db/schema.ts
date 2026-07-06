@@ -124,6 +124,9 @@ export const foods = pgTable(
     vitaminDPct: doublePrecision("vitamin_d_pct"),
     barcode: text("barcode"),
     isVerified: boolean("is_verified").notNull().default(false),
+    // True for user dishes that should appear under the Recipes tab (vs the
+    // general Foods list). Purely a categorisation flag.
+    isRecipe: boolean("is_recipe").notNull().default(false),
     // Global popularity signal: how many diary entries reference this food.
     // Search ranks by it so the entries people actually log surface first.
     logCount: integer("log_count").notNull().default(0),
