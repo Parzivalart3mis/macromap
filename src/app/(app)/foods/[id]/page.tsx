@@ -1,6 +1,8 @@
 "use client";
 
-import { History, Pencil } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
+import { History, Pencil, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -174,10 +176,29 @@ export default function FoodDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
+  const { user } = useUser();
   const [food, setFood] = useState<FoodDTO | null>(null);
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const isOwner = Boolean(food && user && food.createdByUserId === user.id);
+
+  async function deleteFood() {
+    if (!food) return;
+    if (!window.confirm(`Delete "${food.name}"? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/api/foods/${id}`, { method: "DELETE" });
+      toast.success(`Deleted ${food.name}`);
+      router.back();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+      setDeleting(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -290,6 +311,18 @@ export default function FoodDetailPage({
               )}
             </CardContent>
           </Card>
+
+          {isOwner ? (
+            <Button
+              variant="destructive"
+              className="w-full"
+              disabled={deleting}
+              onClick={deleteFood}
+            >
+              <Trash2 data-icon="inline-start" aria-hidden />
+              {deleting ? "Deleting..." : "Delete food"}
+            </Button>
+          ) : null}
         </div>
       )}
       {food && editOpen ? (
