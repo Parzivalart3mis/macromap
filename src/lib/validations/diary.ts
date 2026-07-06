@@ -44,6 +44,21 @@ export const createSavedMealSchema = z.object({
   mealName: z.string().min(1).max(40),
 });
 
+/** Build a saved meal from scratch out of picked foods (the meal builder). */
+export const buildSavedMealSchema = z.object({
+  name: z.string().min(1).max(100),
+  directions: z.string().max(2000).optional(),
+  items: z
+    .array(
+      z.object({
+        foodId: z.uuid(),
+        quantity: z.number().positive(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+
 export const logSavedMealSchema = z.object({
   savedMealId: z.uuid(),
   date: dateString,

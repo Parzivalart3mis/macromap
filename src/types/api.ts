@@ -124,6 +124,7 @@ export interface CustomStoreOrderDTO {
 export interface SavedMealDTO {
   id: string;
   name: string;
+  directions: string | null;
   entriesSnapshotJson: Array<{
     label: string;
     quantity: number;

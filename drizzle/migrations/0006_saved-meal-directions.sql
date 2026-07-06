@@ -1,0 +1,1 @@
+ALTER TABLE "saved_meals" ADD COLUMN "directions" text;

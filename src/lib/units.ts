@@ -3,7 +3,7 @@ import { roundNutrition, scaleNutrition } from "@/lib/nutrition";
 import { NUTRITION_KEYS, type NutritionSnapshot } from "@/types/nutrition";
 
 /** Nutrition of one native serving from a client food DTO. */
-function dtoNutrition(food: FoodDTO): NutritionSnapshot {
+export function dtoNutrition(food: FoodDTO): NutritionSnapshot {
   const snapshot: NutritionSnapshot = {
     calories: food.calories,
     proteinG: food.proteinG,

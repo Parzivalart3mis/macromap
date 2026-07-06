@@ -111,6 +111,14 @@ function MealDialog({
             </li>
           ))}
         </ul>
+        {meal.directions ? (
+          <div className="rounded-xl bg-muted/60 p-3 text-sm">
+            <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Directions
+            </p>
+            <p className="whitespace-pre-wrap">{meal.directions}</p>
+          </div>
+        ) : null}
         <Button variant="destructive" disabled={busy} onClick={remove}>
           <Trash2 data-icon="inline-start" aria-hidden />
           {busy ? "Deleting..." : "Delete meal"}
@@ -139,6 +147,10 @@ export default function MyMealsRecipesFoodsPage() {
       .then((data) => setFoods(data.foods))
       .catch(() => setFoods([]));
     loadMeals();
+    // Refresh saved meals when returning from the meal builder.
+    const onFocus = () => loadMeals();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
 
   const q = query.trim().toLowerCase();
@@ -153,8 +165,7 @@ export default function MyMealsRecipesFoodsPage() {
     recipes: { label: "Create a Recipe", onClick: () => router.push("/foods/new") },
     meals: {
       label: "Create a Meal",
-      onClick: () =>
-        toast.info("Log foods into a diary meal, then use its menu to save it as a template"),
+      onClick: () => router.push("/more/foods/new-meal"),
     },
     foods: { label: "Create a Food", onClick: () => router.push("/foods/new") },
   };

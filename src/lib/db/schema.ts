@@ -311,6 +311,7 @@ export const savedMeals = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    directions: text("directions"),
     entriesSnapshotJson: jsonb("entries_snapshot_json")
       .$type<SavedMealEntrySnapshot[]>()
       .notNull(),
