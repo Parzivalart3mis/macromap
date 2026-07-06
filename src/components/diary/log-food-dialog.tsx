@@ -211,7 +211,10 @@ export function LogFoodDialog({
           <DialogTitle className="diary-entry-text pr-6 text-lg leading-snug">
             {food.name}
           </DialogTitle>
-          <DialogDescription>{food.brandName ?? "Generic"}</DialogDescription>
+          <DialogDescription>
+            {food.brandName ? `${food.brandName}, ` : ""}
+            {food.servingSizeValue} {food.servingSizeUnit}
+          </DialogDescription>
           {food.description ? (
             <p className="diary-entry-text rounded-xl bg-muted/60 px-3 py-2 text-left text-sm text-foreground/80">
               {food.description}

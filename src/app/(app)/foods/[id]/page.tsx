@@ -221,8 +221,8 @@ export default function FoodDetailPage({
               {food.isVerified ? <VerifiedBadge /> : null}
             </div>
             <p className="text-sm text-muted-foreground">
-              {food.brandName ? `${food.brandName} · ` : ""}
-              {food.servingSizeValue} {food.servingSizeUnit} per serving
+              {food.brandName ? `${food.brandName}, ` : ""}
+              {food.servingSizeValue} {food.servingSizeUnit}
               {food.barcode ? ` · barcode ${food.barcode}` : ""}
             </p>
             {food.description ? (

@@ -55,21 +55,19 @@ interface RecentItem {
   lastQuantity: number;
 }
 
+/** Standard food line: "Brand, serving size" (+ last quantity and calories). */
 function foodSubtitle(food: FoodDTO, quantity = 1): string {
-  const parts = [
-    `${Math.round(food.calories * quantity)} cal`,
-    quantity === 1
-      ? `${food.servingSizeValue} ${food.servingSizeUnit}`
-      : `${quantity} servings`,
-  ];
-  if (food.brandName) parts.push(food.brandName);
-  return parts.join(", ");
+  const serving = `${food.servingSizeValue} ${food.servingSizeUnit}`;
+  const base = food.brandName ? `${food.brandName}, ${serving}` : serving;
+  const qty = quantity !== 1 ? ` × ${quantity}` : "";
+  return `${base}${qty} · ${Math.round(food.calories * quantity)} cal`;
 }
 
 /** MFP-style row: tap the body for the serving picker, tap + to log instantly. */
 function QuickRow({
   title,
   subtitle,
+  description,
   verified,
   busy,
   onOpen,
@@ -78,6 +76,7 @@ function QuickRow({
 }: {
   title: string;
   subtitle: string;
+  description?: string | null;
   verified?: boolean;
   busy: boolean;
   onOpen?: () => void;
@@ -96,7 +95,14 @@ function QuickRow({
           <span className="truncate text-[15px] font-semibold">{title}</span>
           {verified ? <VerifiedBadge /> : null}
         </span>
-        <span className="text-[13px] text-muted-foreground">{subtitle}</span>
+        <span className="block truncate text-[13px] text-muted-foreground">
+          {subtitle}
+        </span>
+        {description ? (
+          <span className="block truncate text-[13px] text-muted-foreground/80 italic">
+            {description}
+          </span>
+        ) : null}
       </button>
       {editHref ? (
         <Button
@@ -764,6 +770,7 @@ function AddFoodView() {
                           key={food.id}
                           title={food.name}
                           subtitle={foodSubtitle(food)}
+                          description={food.description}
                           verified={food.isVerified}
                           busy={quickBusy === food.id}
                           onOpen={() => {
@@ -785,7 +792,7 @@ function AddFoodView() {
                           <QuickRow
                             key={`${result.source}-${result.barcode ?? index}`}
                             title={result.name}
-                            subtitle={`${Math.round(result.calories)} cal, ${result.servingSizeValue} ${result.servingSizeUnit}${result.brandName ? `, ${result.brandName}` : ""} · ${result.source === "usda" ? "USDA" : "Open Food Facts"}`}
+                            subtitle={`${result.brandName ? `${result.brandName}, ` : ""}${result.servingSizeValue} ${result.servingSizeUnit} · ${Math.round(result.calories)} cal · ${result.source === "usda" ? "USDA" : "Open Food Facts"}`}
                             busy={importingIndex === index}
                             onOpen={() => importExternal(result, index)}
                             onQuickLog={() => importExternal(result, index)}
@@ -833,6 +840,7 @@ function AddFoodView() {
                           key={food.id}
                           title={food.name}
                           subtitle={foodSubtitle(food, lastQuantity)}
+                          description={food.description}
                           verified={food.isVerified}
                           busy={quickBusy === food.id}
                           onOpen={() => {
@@ -894,6 +902,7 @@ function AddFoodView() {
                           key={food.id}
                           title={food.name}
                           subtitle={foodSubtitle(food)}
+                          description={food.description}
                           verified={food.isVerified}
                           busy={quickBusy === food.id}
                           onOpen={() => {

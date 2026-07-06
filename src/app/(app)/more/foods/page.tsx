@@ -21,19 +21,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/client/fetcher";
 import type { FoodDTO, SavedMealDTO } from "@/types/api";
 
-function macroSubtitle(carbs: number, protein: number, fat: number, prefix?: string) {
-  const macros = `Carbs ${Math.round(carbs)}g, Protein ${Math.round(protein)}g, Fat ${Math.round(fat)}g`;
-  return prefix ? `${prefix}, ${macros}` : macros;
+/** Standard food line: "Brand, serving size". */
+function foodLine(food: FoodDTO): string {
+  const serving = `${food.servingSizeValue} ${food.servingSizeUnit}`;
+  return food.brandName ? `${food.brandName}, ${serving}` : serving;
 }
 
 function LibraryRow({
   title,
   subtitle,
+  description,
   calories,
   onClick,
 }: {
   title: string;
   subtitle: string;
+  description?: string | null;
   calories: number;
   onClick: () => void;
 }) {
@@ -48,6 +51,11 @@ function LibraryRow({
         <span className="block truncate text-[13px] text-muted-foreground">
           {subtitle}
         </span>
+        {description ? (
+          <span className="block truncate text-[13px] text-muted-foreground/80 italic">
+            {description}
+          </span>
+        ) : null}
       </span>
       <span className="shrink-0 text-lg font-semibold tabular-nums">
         {Math.round(calories).toLocaleString()}
@@ -192,12 +200,8 @@ export default function MyMealsRecipesFoodsPage() {
                   <LibraryRow
                     key={food.id}
                     title={food.name}
-                    subtitle={macroSubtitle(
-                      food.carbsG,
-                      food.proteinG,
-                      food.fatG,
-                      `${food.servingSizeValue} ${food.servingSizeUnit}`,
-                    )}
+                    subtitle={foodLine(food)}
+                    description={food.description}
                     calories={food.calories}
                     onClick={() => router.push(`/foods/${food.id}`)}
                   />
@@ -217,21 +221,17 @@ export default function MyMealsRecipesFoodsPage() {
             ) : (
               <div className="animate-fade-up">
                 {meals.map((meal) => {
-                  const totals = meal.entriesSnapshotJson.reduce(
-                    (acc, line) => ({
-                      calories: acc.calories + line.nutrition.calories,
-                      carbs: acc.carbs + line.nutrition.carbsG,
-                      protein: acc.protein + line.nutrition.proteinG,
-                      fat: acc.fat + line.nutrition.fatG,
-                    }),
-                    { calories: 0, carbs: 0, protein: 0, fat: 0 },
+                  const totalCalories = meal.entriesSnapshotJson.reduce(
+                    (sum, line) => sum + line.nutrition.calories,
+                    0,
                   );
+                  const count = meal.entriesSnapshotJson.length;
                   return (
                     <LibraryRow
                       key={meal.id}
                       title={meal.name}
-                      subtitle={macroSubtitle(totals.carbs, totals.protein, totals.fat)}
-                      calories={totals.calories}
+                      subtitle={`${count} ${count === 1 ? "item" : "items"}`}
+                      calories={totalCalories}
                       onClick={() => setOpenMeal(meal)}
                     />
                   );
@@ -259,13 +259,8 @@ export default function MyMealsRecipesFoodsPage() {
                   <LibraryRow
                     key={food.id}
                     title={food.name}
-                    subtitle={macroSubtitle(
-                      food.carbsG,
-                      food.proteinG,
-                      food.fatG,
-                      food.brandName ??
-                        `${food.servingSizeValue} ${food.servingSizeUnit}`,
-                    )}
+                    subtitle={foodLine(food)}
+                    description={food.description}
                     calories={food.calories}
                     onClick={() => router.push(`/foods/${food.id}`)}
                   />

@@ -162,8 +162,17 @@ export function EntryEditDialog({
             {label}
           </DialogTitle>
           <DialogDescription>
-            {food?.brandName ?? (entry.customStoreOrderId ? "Custom build" : "Generic")}
+            {food
+              ? `${food.brandName ? `${food.brandName}, ` : ""}${food.servingSizeValue} ${food.servingSizeUnit}`
+              : entry.customStoreOrderId
+                ? "Custom build"
+                : "Generic"}
           </DialogDescription>
+          {food?.description ? (
+            <p className="diary-entry-text rounded-xl bg-muted/60 px-3 py-2 text-left text-sm text-foreground/80">
+              {food.description}
+            </p>
+          ) : null}
         </DialogHeader>
 
         {/* Fields */}

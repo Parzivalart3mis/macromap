@@ -194,10 +194,15 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
                         </span>
                         {item.isDefaultVerified ? <VerifiedBadge /> : null}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {Math.round(item.food.proteinG)}p ·{" "}
-                        {Math.round(item.food.carbsG)}c · {Math.round(item.food.fatG)}f
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {item.food.brandName ? `${item.food.brandName}, ` : ""}
+                        {item.food.servingSizeValue} {item.food.servingSizeUnit}
                       </span>
+                      {item.food.description ? (
+                        <span className="block truncate text-xs text-muted-foreground/80 italic">
+                          {item.food.description}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
                       {Math.round(item.food.calories)} kcal
