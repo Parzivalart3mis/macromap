@@ -104,12 +104,18 @@ export interface StoreIngredientDTO {
   food: FoodDTO;
 }
 
+export interface CustomStoreOrderItemDTO {
+  ingredientFoodId: string;
+  quantity: number;
+}
+
 export interface CustomStoreOrderDTO {
   id: string;
   storeId: string;
   name: string;
   nutritionSnapshotJson: NutritionSnapshot;
   createdAt: string;
+  items?: CustomStoreOrderItemDTO[];
 }
 
 export interface SavedMealDTO {

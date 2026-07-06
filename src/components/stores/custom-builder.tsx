@@ -19,22 +19,34 @@ interface Selection {
 export function CustomBuilder({
   slug,
   ingredients,
+  editOrder,
   onSaved,
+  onCancelEdit,
 }: {
   slug: string;
   ingredients: StoreIngredientDTO[];
+  editOrder?: CustomStoreOrderDTO | null;
   onSaved: (order: CustomStoreOrderDTO) => void;
+  onCancelEdit?: () => void;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(editOrder?.name ?? "");
   const [selected, setSelected] = useState<Map<string, Selection>>(() => {
     const initial = new Map<string, Selection>();
-    for (const ingredient of ingredients) {
-      if (ingredient.isDefaultSelected) initial.set(ingredient.food.id, { quantity: 1 });
+    if (editOrder?.items) {
+      // Reload a saved build's exact selections.
+      for (const item of editOrder.items) {
+        initial.set(item.ingredientFoodId, { quantity: item.quantity });
+      }
+    } else {
+      for (const ingredient of ingredients) {
+        if (ingredient.isDefaultSelected) initial.set(ingredient.food.id, { quantity: 1 });
+      }
     }
     return initial;
   });
   const [saving, setSaving] = useState(false);
   const [logAfterSave, setLogAfterSave] = useState(false);
+  const isEdit = Boolean(editOrder);
 
   const groups = useMemo(() => {
     const map = new Map<string, StoreIngredientDTO[]>();
@@ -95,18 +107,18 @@ export function CustomBuilder({
     setSaving(true);
     setLogAfterSave(logNow);
     try {
+      const body = JSON.stringify({
+        name: name.trim(),
+        items: [...selected.entries()].map(([ingredientFoodId, sel]) => ({
+          ingredientFoodId,
+          quantity: sel.quantity,
+        })),
+      });
       const { order } = await apiFetch<{ order: CustomStoreOrderDTO }>(
-        `/api/stores/${slug}/custom-orders`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: name.trim(),
-            items: [...selected.entries()].map(([ingredientFoodId, sel]) => ({
-              ingredientFoodId,
-              quantity: sel.quantity,
-            })),
-          }),
-        },
+        isEdit
+          ? `/api/stores/${slug}/custom-orders/${editOrder!.id}`
+          : `/api/stores/${slug}/custom-orders`,
+        { method: isEdit ? "PATCH" : "POST", body },
       );
       if (logNow) {
         const mealName = defaultMealForNow();
@@ -121,11 +133,11 @@ export function CustomBuilder({
             loggedVia: "store_builder",
           }),
         });
-        toast.success(`Saved and logged to ${mealName}`);
+        toast.success(`${isEdit ? "Updated" : "Saved"} and logged to ${mealName}`);
       } else {
-        toast.success("Build saved");
+        toast.success(isEdit ? "Build updated" : "Build saved");
       }
-      setName("");
+      if (!isEdit) setName("");
       onSaved(order);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Save failed");
@@ -136,6 +148,16 @@ export function CustomBuilder({
 
   return (
     <div className="space-y-4 pb-28">
+      {isEdit ? (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <span className="font-medium text-primary">Editing “{editOrder!.name}”</span>
+          {onCancelEdit ? (
+            <Button variant="ghost" size="xs" onClick={onCancelEdit}>
+              Cancel
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <Input
         placeholder='Name this build, e.g. "My usual footlong"'
         value={name}
@@ -224,10 +246,18 @@ export function CustomBuilder({
               onClick={() => save(false)}
               variant="secondary"
             >
-              {saving && !logAfterSave ? "Saving..." : "Save build"}
+              {saving && !logAfterSave
+                ? "Saving..."
+                : isEdit
+                  ? "Update build"
+                  : "Save build"}
             </Button>
             <Button className="flex-1" disabled={saving} onClick={() => save(true)}>
-              {saving && logAfterSave ? "Saving..." : "Save and log"}
+              {saving && logAfterSave
+                ? "Saving..."
+                : isEdit
+                  ? "Update and log"
+                  : "Save and log"}
             </Button>
           </div>
         </div>

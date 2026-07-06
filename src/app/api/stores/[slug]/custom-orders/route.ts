@@ -3,14 +3,8 @@ import { NextResponse } from "next/server";
 
 import { ApiError, handleApiError, parseBody, requireDbUser, requireUserId } from "@/lib/api";
 import { db } from "@/lib/db";
-import {
-  customStoreOrderItems,
-  customStoreOrders,
-  foods,
-  storeIngredients,
-  stores,
-} from "@/lib/db/schema";
-import { foodToNutrition, roundNutrition, scaleNutrition, sumNutrition } from "@/lib/nutrition";
+import { customStoreOrderItems, customStoreOrders, stores } from "@/lib/db/schema";
+import { computeOrderSnapshot } from "@/lib/stores/order-nutrition";
 import { createCustomOrderSchema } from "@/lib/validations/stores";
 
 async function getStore(slug: string) {
@@ -34,7 +28,31 @@ export async function GET(
         and(eq(customStoreOrders.userId, userId), eq(customStoreOrders.storeId, store.id)),
       )
       .orderBy(desc(customStoreOrders.createdAt));
-    return NextResponse.json({ orders });
+
+    // Attach each order's items so the builder can reload a saved build.
+    const itemRows = orders.length
+      ? await db
+          .select()
+          .from(customStoreOrderItems)
+          .where(
+            inArray(
+              customStoreOrderItems.customStoreOrderId,
+              orders.map((order) => order.id),
+            ),
+          )
+      : [];
+
+    return NextResponse.json({
+      orders: orders.map((order) => ({
+        ...order,
+        items: itemRows
+          .filter((item) => item.customStoreOrderId === order.id)
+          .map((item) => ({
+            ingredientFoodId: item.ingredientFoodId,
+            quantity: item.quantity,
+          })),
+      })),
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -50,30 +68,7 @@ export async function POST(
     const store = await getStore(slug);
     const input = await parseBody(request, createCustomOrderSchema);
 
-    // Only ingredients that belong to this store may be used, and nutrition is
-    // computed server-side so the snapshot can't be forged.
-    const foodIds = [...new Set(input.items.map((item) => item.ingredientFoodId))];
-    const validIngredients = await db
-      .select({ foodId: storeIngredients.foodId, food: foods })
-      .from(storeIngredients)
-      .innerJoin(foods, eq(foods.id, storeIngredients.foodId))
-      .where(
-        and(eq(storeIngredients.storeId, store.id), inArray(storeIngredients.foodId, foodIds)),
-      );
-    const foodsById = new Map(validIngredients.map((row) => [row.foodId, row.food]));
-
-    const snapshots = input.items.map((item) => {
-      const food = foodsById.get(item.ingredientFoodId);
-      if (!food) {
-        throw new ApiError(
-          "invalid_request",
-          "One or more ingredients do not belong to this store",
-          400,
-        );
-      }
-      return scaleNutrition(foodToNutrition(food), item.quantity);
-    });
-    const nutritionSnapshotJson = roundNutrition(sumNutrition(snapshots));
+    const nutritionSnapshotJson = await computeOrderSnapshot(store.id, input.items);
 
     const [order] = await db
       .insert(customStoreOrders)

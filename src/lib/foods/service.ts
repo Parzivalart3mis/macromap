@@ -54,13 +54,16 @@ export async function searchFoods(
 ): Promise<Food[]> {
   // MyFitnessPal-style relevance: a hit in the food's NAME beats a hit in its
   // brand ("bread" lists breads before every Panera Bread dish); within that,
-  // foods THIS USER has logged come first, then globally popular foods
-  // (log_count), then similarity, with the verified badge as final tiebreak.
+  // the user's OWN foods (created or logged) come first, then globally popular
+  // foods (log_count), then similarity, with the verified badge as final
+  // tiebreak.
   const nameMatch = sql<number>`case when ${foods.name} ilike ${"%" + query + "%"} then 1 else 0 end`;
   const substrMatch = sql<number>`case when ${searchTarget} ilike ${"%" + query + "%"} then 1 else 0 end`;
   const wordScore = sql<number>`word_similarity(${query}, ${searchTarget})`;
-  const personal = userId
-    ? sql<number>`case when exists (
+  // "Mine": a food I created, or one I have logged before — surfaces personal
+  // recipes above generic USDA entries even before they're logged.
+  const mine = userId
+    ? sql<number>`case when ${foods.createdByUserId} = ${userId} or exists (
         select 1 from ${diaryEntries}
         join ${diaryMeals} on ${diaryMeals.id} = ${diaryEntries.diaryMealId}
         join ${diaryDays} on ${diaryDays.id} = ${diaryMeals.diaryDayId}
@@ -78,7 +81,7 @@ export async function searchFoods(
     )
     .orderBy(
       desc(nameMatch),
-      desc(personal),
+      desc(mine),
       desc(foods.logCount),
       desc(substrMatch),
       desc(wordScore),

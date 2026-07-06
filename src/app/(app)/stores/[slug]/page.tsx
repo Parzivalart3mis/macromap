@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -40,6 +40,8 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
   const [selectedFood, setSelectedFood] = useState<FoodDTO | null>(null);
   const [logging, setLogging] = useState(false);
   const [orderBusy, setOrderBusy] = useState<string | null>(null);
+  const [tab, setTab] = useState("menu");
+  const [editingOrder, setEditingOrder] = useState<CustomStoreOrderDTO | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -116,6 +118,38 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
     }
   }
 
+  async function reloadOrders() {
+    try {
+      const data = await apiFetch<{ orders: CustomStoreOrderDTO[] }>(
+        `/api/stores/${slug}/custom-orders`,
+      );
+      setOrders(data.orders);
+    } catch {
+      // Non-fatal: the list just keeps its previous state.
+    }
+  }
+
+  function startEdit(order: CustomStoreOrderDTO) {
+    setEditingOrder(order);
+    setTab("builder");
+  }
+
+  async function deleteOrder(order: CustomStoreOrderDTO) {
+    if (!window.confirm(`Delete "${order.name}"?`)) return;
+    setOrderBusy(order.id);
+    try {
+      await apiFetch(`/api/stores/${slug}/custom-orders/${order.id}`, {
+        method: "DELETE",
+      });
+      setOrders((prev) => (prev ?? []).filter((o) => o.id !== order.id));
+      toast.success(`Deleted ${order.name}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setOrderBusy(null);
+    }
+  }
+
   if (error) {
     return (
       <main>
@@ -148,7 +182,15 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
         </div>
       </header>
 
-      <Tabs defaultValue="menu" className="p-4">
+      <Tabs
+        value={tab}
+        onValueChange={(next) => {
+          setTab(next);
+          // Leaving the builder abandons an in-progress edit.
+          if (next !== "builder") setEditingOrder(null);
+        }}
+        className="p-4"
+      >
         <TabsList className="w-full">
           <TabsTrigger value="menu">Menu</TabsTrigger>
           <TabsTrigger value="builder">Builder</TabsTrigger>
@@ -233,9 +275,19 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
             />
           ) : (
             <CustomBuilder
+              key={editingOrder?.id ?? "new"}
               slug={slug}
               ingredients={ingredients}
-              onSaved={(order) => setOrders((prev) => [order, ...(prev ?? [])])}
+              editOrder={editingOrder}
+              onSaved={() => {
+                reloadOrders();
+                setEditingOrder(null);
+                setTab("saved");
+              }}
+              onCancelEdit={() => {
+                setEditingOrder(null);
+                setTab("saved");
+              }}
             />
           )}
         </TabsContent>
@@ -253,7 +305,7 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
                   key={order.id}
                   className="flex items-center justify-between gap-3 px-3 py-2.5"
                 >
-                  <span className="min-w-0">
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{order.name}</span>
                     <span className="text-xs text-muted-foreground">
                       {Math.round(order.nutritionSnapshotJson.calories)} kcal ·{" "}
@@ -261,11 +313,30 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
                     </span>
                   </span>
                   <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Edit ${order.name}`}
+                    disabled={orderBusy === order.id}
+                    onClick={() => startEdit(order)}
+                  >
+                    <Pencil aria-hidden />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Delete ${order.name}`}
+                    className="text-destructive"
+                    disabled={orderBusy === order.id}
+                    onClick={() => deleteOrder(order)}
+                  >
+                    <Trash2 aria-hidden />
+                  </Button>
+                  <Button
                     size="sm"
                     disabled={orderBusy === order.id}
                     onClick={() => logOrder(order)}
                   >
-                    {orderBusy === order.id ? "Logging..." : "Log"}
+                    {orderBusy === order.id ? "..." : "Log"}
                   </Button>
                 </li>
               ))}
