@@ -3,6 +3,8 @@
 import {
   ArrowLeft,
   Check,
+  ChevronDown,
+  ChevronUp,
   Mic,
   MicOff,
   PlusCircle,
@@ -16,13 +18,22 @@ import { toast } from "sonner";
 import { EmptyState, ListSkeleton } from "@/components/async-states";
 import { BarcodeScanner, barcodeScanSupported } from "@/components/diary/barcode-scanner";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
+import { MacroRing, macroPctOfCalories } from "@/components/nutrition/macro-ring";
+import { NutritionPanel } from "@/components/nutrition/nutrition-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useVoiceLogging } from "@/hooks/useVoiceLogging";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
+import { computeServing, servingOptions, type UnitOption } from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type {
   ExternalFoodResultDTO,
@@ -102,6 +113,9 @@ export function MealFoodPicker({
   const [recent, setRecent] = useState<FoodDTO[] | null>(null);
   const [myFoods, setMyFoods] = useState<FoodDTO[] | null>(null);
 
+  // A tapped food opens the serving-size detail step before it is added.
+  const [detail, setDetail] = useState<FoodDTO | null>(null);
+
   // Modes
   const [mode, setMode] = useState<Mode>(null);
   const [barcodeValue, setBarcodeValue] = useState("");
@@ -160,7 +174,7 @@ export function MealFoodPicker({
         method: "POST",
         body: JSON.stringify(result),
       });
-      added(food);
+      setDetail(food);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Import failed");
     } finally {
@@ -178,8 +192,8 @@ export function MealFoodPicker({
         { method: "POST", body: JSON.stringify({ barcode: code }) },
       );
       if (result.food) {
-        added(result.food);
         setBarcodeValue("");
+        setDetail(result.food);
       } else {
         setBarcodeMiss(code);
       }
@@ -430,7 +444,7 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onAdd={() => added(food)}
+                      onAdd={() => setDetail(food)}
                     />
                   ))}
                 </div>
@@ -488,7 +502,7 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onAdd={() => added(food)}
+                      onAdd={() => setDetail(food)}
                     />
                   ))}
                 </div>
@@ -509,7 +523,7 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onAdd={() => added(food)}
+                      onAdd={() => setDetail(food)}
                     />
                   ))}
                 </div>
@@ -530,7 +544,7 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onAdd={() => added(food)}
+                      onAdd={() => setDetail(food)}
                     />
                   ))}
                 </div>
@@ -539,6 +553,211 @@ export function MealFoodPicker({
           </Tabs>
         )}
       </div>
+
+      {detail ? (
+        <MealFoodDetail
+          food={detail}
+          onBack={() => setDetail(null)}
+          onConfirm={(quantity) => {
+            added(detail, quantity);
+            setDetail(null);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Serving-size step: pick a unit and number of servings for one food, see the
+ * live macro preview, then confirm to add it to the meal. Layered over the
+ * picker list so confirming (or backing out) returns to the list.
+ */
+function MealFoodDetail({
+  food,
+  onConfirm,
+  onBack,
+}: {
+  food: FoodDTO;
+  onConfirm: (quantity: number) => void;
+  onBack: () => void;
+}) {
+  const options = servingOptions(food);
+  const [option, setOption] = useState<UnitOption>(options[0]);
+  const [servings, setServings] = useState("1");
+  const [unitSheetOpen, setUnitSheetOpen] = useState(false);
+  const [factsOpen, setFactsOpen] = useState(false);
+
+  const servingNum = Number(servings);
+  const valid = Number.isFinite(servingNum) && servingNum > 0;
+  const { servingMultiplier, nutrition } = computeServing(food, option, valid ? servingNum : 0);
+  // Meal items store nutrition as native-serving multiples, so the added
+  // quantity is servings scaled by the unit's multiplier.
+  const quantity = valid ? servingNum * servingMultiplier : 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-background">
+      <header className="top-header app-chrome glass sticky top-0 z-30 border-b border-border/60 px-4 pb-3">
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <Button variant="ghost" size="icon-sm" aria-label="Back to food list" onClick={onBack}>
+            <ArrowLeft aria-hidden />
+          </Button>
+          <h2 className="text-lg font-bold">Add Food</h2>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Add to meal"
+            className="text-primary"
+            disabled={!valid}
+            onClick={() => onConfirm(quantity)}
+          >
+            <Check aria-hidden />
+          </Button>
+        </div>
+      </header>
+
+      <div className="flex-1 space-y-5 overflow-y-auto p-4">
+        <div>
+          <h3 className="text-2xl font-extrabold tracking-tight">{food.name}</h3>
+          <p className="text-sm text-muted-foreground">
+            {food.brandName ? `${food.brandName}, ` : ""}
+            {food.servingSizeValue} {food.servingSizeUnit}
+          </p>
+          {food.description ? (
+            <p className="mt-2 rounded-xl bg-muted/60 px-3 py-2 text-sm text-foreground/80">
+              {food.description}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="divide-y rounded-2xl border bg-card text-sm">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+            onClick={() => setUnitSheetOpen(true)}
+          >
+            <span className="font-medium">Serving Size</span>
+            <span className="flex items-center gap-1 rounded-lg border px-3 py-1.5 font-semibold text-primary">
+              {option.label}
+              <ChevronDown className="size-3.5" aria-hidden />
+            </span>
+          </button>
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <label htmlFor="meal-servings" className="font-medium">
+              Number of Servings
+            </label>
+            <Input
+              id="meal-servings"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={servings}
+              onChange={(event) => {
+                const raw = event.target.value.replace(/[^0-9.]/g, "");
+                const parts = raw.split(".");
+                setServings(parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : raw);
+              }}
+              className={cn(
+                "h-9 w-24 text-right font-semibold",
+                !valid && servings !== "" && "border-destructive",
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <MacroRing
+            calories={nutrition.calories}
+            carbsG={nutrition.carbsG}
+            fatG={nutrition.fatG}
+            proteinG={nutrition.proteinG}
+            className="size-28"
+          />
+          <div className="flex flex-1 justify-around gap-2 text-center">
+            {(
+              [
+                ["Carbs", nutrition.carbsG, nutrition.carbsG * 4, "--macro-carbs"],
+                ["Fat", nutrition.fatG, nutrition.fatG * 9, "--macro-fat"],
+                ["Protein", nutrition.proteinG, nutrition.proteinG * 4, "--macro-protein"],
+              ] as const
+            ).map(([label, grams, cal, colorVar]) => (
+              <div key={label}>
+                <p
+                  className="text-sm font-bold tabular-nums"
+                  style={{ color: `var(${colorVar})` }}
+                >
+                  {macroPctOfCalories(cal, nutrition.carbsG, nutrition.fatG, nutrition.proteinG)}%
+                </p>
+                <p className="text-base font-bold tabular-nums">{Math.round(grams)} g</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between py-1 text-sm font-semibold"
+            aria-expanded={factsOpen}
+            onClick={() => setFactsOpen((open) => !open)}
+          >
+            Nutrition Facts
+            <span className="flex items-center gap-1 font-semibold text-primary">
+              {factsOpen ? "Hide" : "Show"}
+              {factsOpen ? (
+                <ChevronUp className="size-4" aria-hidden />
+              ) : (
+                <ChevronDown className="size-4" aria-hidden />
+              )}
+            </span>
+          </button>
+          {factsOpen ? (
+            <div className="animate-fade-up pt-1">
+              <NutritionPanel nutrition={nutrition} showAll />
+            </div>
+          ) : null}
+        </div>
+
+        <Button className="w-full" disabled={!valid} onClick={() => onConfirm(quantity)}>
+          <Check data-icon="inline-start" aria-hidden />
+          Add to meal
+        </Button>
+      </div>
+
+      <Sheet open={unitSheetOpen} onOpenChange={setUnitSheetOpen}>
+        <SheetContent
+          side="bottom"
+          className="sheet-safe-bottom max-h-[70dvh] overflow-y-auto rounded-t-2xl"
+        >
+          <SheetHeader>
+            <SheetTitle>Select Unit</SheetTitle>
+          </SheetHeader>
+          <ul className="space-y-1 px-4 pb-6">
+            {options.map((opt) => {
+              const active = opt.label === option.label;
+              return (
+                <li key={opt.label}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOption(opt);
+                      setUnitSheetOpen(false);
+                    }}
+                    className={cn(
+                      "flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-4 text-left font-medium",
+                      active ? "border-primary bg-primary/5" : "bg-card",
+                    )}
+                  >
+                    {opt.label}
+                    {active ? <Check className="size-5 text-primary" aria-hidden /> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
