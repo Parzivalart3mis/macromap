@@ -1,10 +1,11 @@
 "use client";
 
 import { ArrowLeft, ChevronDown, ChevronUp, Minus, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { toast } from "sonner";
 
+import { ListSkeleton } from "@/components/async-states";
 import { MealFoodPicker } from "@/components/diary/meal-food-picker";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { MacroRing, macroPctOfCalories } from "@/components/nutrition/macro-ring";
@@ -22,8 +23,16 @@ interface BuilderItem {
   quantity: number;
 }
 
-export default function CreateMealPage() {
+// The library tab to return to after saving (defaults to Meals).
+const LIBRARY_TABS = ["meals", "recipes", "foods"] as const;
+
+function CreateMealView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromParam = searchParams.get("from");
+  const returnTab = LIBRARY_TABS.includes(fromParam as (typeof LIBRARY_TABS)[number])
+    ? (fromParam as string)
+    : "meals";
   const [name, setName] = useState("");
   const [directions, setDirections] = useState("");
   const [items, setItems] = useState<BuilderItem[]>([]);
@@ -80,7 +89,8 @@ export default function CreateMealPage() {
         }),
       });
       toast.success("Meal saved");
-      router.back();
+      // Return to the originating library tab (fresh mount refetches the list).
+      router.replace(`/more/foods?tab=${returnTab}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Save failed");
       setBusy(false);
@@ -90,7 +100,7 @@ export default function CreateMealPage() {
   const canSave = name.trim().length > 0 && items.length > 0;
 
   return (
-    <main className="pb-28">
+    <main className="pb-40">
       <header className="top-header app-chrome glass sticky top-0 z-30 border-b border-border/60 px-4 pb-3">
         <div className="flex items-center justify-between gap-2 pt-2">
           <Button
@@ -256,10 +266,10 @@ export default function CreateMealPage() {
         </section>
       </div>
 
-      {/* Bottom add-food bar */}
+      {/* Bottom add-food bar — floats above the fixed bottom nav */}
       <div
         className="fixed inset-x-0 z-30 mx-auto max-w-2xl px-4"
-        style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+        style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}
       >
         <Button
           size="lg"
@@ -276,5 +286,13 @@ export default function CreateMealPage() {
         <MealFoodPicker onAdd={addFood} onClose={() => setPickerOpen(false)} />
       ) : null}
     </main>
+  );
+}
+
+export default function CreateMealPage() {
+  return (
+    <Suspense fallback={<ListSkeleton rows={5} />}>
+      <CreateMealView />
+    </Suspense>
   );
 }

@@ -2,8 +2,8 @@
 
 import { Search, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ListSkeleton } from "@/components/async-states";
@@ -128,30 +128,50 @@ function MealDialog({
   );
 }
 
-export default function MyMealsRecipesFoodsPage() {
+const TAB_VALUES = ["recipes", "meals", "foods"] as const;
+
+function MyMealsRecipesFoodsView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [foods, setFoods] = useState<FoodDTO[] | null>(null);
   const [savedMeals, setSavedMeals] = useState<SavedMealDTO[] | null>(null);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState("recipes");
+  // Initial tab honours ?tab= so returning from a create flow lands correctly.
+  const [tab, setTab] = useState(() => {
+    const t = searchParams.get("tab");
+    return TAB_VALUES.includes(t as (typeof TAB_VALUES)[number]) ? (t as string) : "recipes";
+  });
   const [openMeal, setOpenMeal] = useState<SavedMealDTO | null>(null);
 
-  function loadMeals() {
+  function loadAll() {
+    apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine")
+      .then((data) => setFoods(data.foods))
+      .catch(() => setFoods([]));
     apiFetch<{ savedMeals: SavedMealDTO[] }>("/api/saved-meals")
       .then((data) => setSavedMeals(data.savedMeals))
       .catch(() => setSavedMeals([]));
   }
+  const loadMeals = loadAll;
 
   useEffect(() => {
-    apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine")
-      .then((data) => setFoods(data.foods))
-      .catch(() => setFoods([]));
-    loadMeals();
-    // Refresh saved meals when returning from the meal builder.
-    const onFocus = () => loadMeals();
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    loadAll();
+    // Refresh when returning to the tab (e.g. after leaving the app or builder).
+    const refresh = () => {
+      if (document.visibilityState === "visible") loadAll();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, []);
+
+  // Keep the tab in the URL so back-navigation restores the current tab.
+  function changeTab(value: string) {
+    setTab(value);
+    router.replace(`/more/foods?tab=${value}`, { scroll: false });
+  }
 
   const q = query.trim().toLowerCase();
   const matches = (name: string) => !q || name.toLowerCase().includes(q);
@@ -165,7 +185,7 @@ export default function MyMealsRecipesFoodsPage() {
     recipes: { label: "Create a Recipe", onClick: () => router.push("/foods/new") },
     meals: {
       label: "Create a Meal",
-      onClick: () => router.push("/more/foods/new-meal"),
+      onClick: () => router.push("/more/foods/new-meal?from=meals"),
     },
     foods: { label: "Create a Food", onClick: () => router.push("/foods/new") },
   };
@@ -188,7 +208,7 @@ export default function MyMealsRecipesFoodsPage() {
           />
         </div>
 
-        <Tabs value={tab} onValueChange={setTab}>
+        <Tabs value={tab} onValueChange={changeTab}>
           <TabsList variant="line" className="w-full justify-around">
             <TabsTrigger value="recipes">Recipes</TabsTrigger>
             <TabsTrigger value="meals">Meals</TabsTrigger>
@@ -300,5 +320,13 @@ export default function MyMealsRecipesFoodsPage() {
         />
       ) : null}
     </main>
+  );
+}
+
+export default function MyMealsRecipesFoodsPage() {
+  return (
+    <Suspense fallback={<ListSkeleton rows={5} />}>
+      <MyMealsRecipesFoodsView />
+    </Suspense>
   );
 }
