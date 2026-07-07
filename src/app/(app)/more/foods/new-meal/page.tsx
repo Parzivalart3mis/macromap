@@ -1,23 +1,16 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, ChevronUp, Minus, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Minus, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
-import { EmptyState, ListSkeleton } from "@/components/async-states";
+import { MealFoodPicker } from "@/components/diary/meal-food-picker";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { MacroRing, macroPctOfCalories } from "@/components/nutrition/macro-ring";
 import { NutritionPanel } from "@/components/nutrition/nutrition-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/client/fetcher";
 import { roundNutrition, scaleNutrition, sumNutrition } from "@/lib/nutrition";
@@ -37,48 +30,22 @@ export default function CreateMealPage() {
   const [factsOpen, setFactsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Add-items search sheet
+  // Add-items full-screen picker
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<FoodDTO[]>([]);
-  const [searching, setSearching] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const totals = roundNutrition(
     sumNutrition(items.map((item) => scaleNutrition(dtoNutrition(item.food), item.quantity))),
   );
 
-  function runSearch(value: string) {
-    setQuery(value);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (value.trim().length < 2) {
-      setResults([]);
-      return;
-    }
-    searchTimer.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const data = await apiFetch<{ foods: FoodDTO[] }>(
-          `/api/foods/search?q=${encodeURIComponent(value.trim())}`,
-        );
-        setResults(data.foods);
-      } catch {
-        toast.error("Search failed");
-      } finally {
-        setSearching(false);
-      }
-    }, 250);
-  }
-
-  function addFood(food: FoodDTO) {
+  function addFood(food: FoodDTO, quantity = 1) {
     setItems((prev) => {
       const existing = prev.find((item) => item.food.id === food.id);
       if (existing) {
         return prev.map((item) =>
-          item.food.id === food.id ? { ...item, quantity: item.quantity + 1 } : item,
+          item.food.id === food.id ? { ...item, quantity: item.quantity + quantity } : item,
         );
       }
-      return [...prev, { food, quantity: 1 }];
+      return [...prev, { food, quantity }];
     });
     toast.success(`Added ${food.name}`);
   }
@@ -304,70 +271,10 @@ export default function CreateMealPage() {
         </Button>
       </div>
 
-      {/* Food picker */}
-      <Sheet open={pickerOpen} onOpenChange={setPickerOpen}>
-        <SheetContent
-          side="bottom"
-          className="sheet-safe-bottom max-h-[85dvh] overflow-y-auto rounded-t-2xl"
-        >
-          <SheetHeader>
-            <SheetTitle>Add Food</SheetTitle>
-            <SheetDescription>Tap a food to add it to the meal</SheetDescription>
-          </SheetHeader>
-          <div className="space-y-3 px-4 pb-6">
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                placeholder="Search foods, brands, flavors..."
-                value={query}
-                onChange={(event) => runSearch(event.target.value)}
-                autoComplete="off"
-                className="h-11 rounded-full pl-10"
-              />
-            </div>
-            {searching ? (
-              <ListSkeleton rows={4} />
-            ) : results.length > 0 ? (
-              <div className="stagger-children space-y-2">
-                {results.map((food) => (
-                  <button
-                    key={food.id}
-                    type="button"
-                    onClick={() => addFood(food)}
-                    className="flex w-full items-center gap-2 rounded-2xl border bg-card p-3 text-left hover:bg-muted"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate text-[15px] font-semibold">{food.name}</span>
-                        {food.isVerified ? <VerifiedBadge /> : null}
-                      </span>
-                      <span className="text-[13px] text-muted-foreground">
-                        {food.brandName ? `${food.brandName}, ` : ""}
-                        {food.servingSizeValue} {food.servingSizeUnit} ·{" "}
-                        {Math.round(food.calories)} cal
-                      </span>
-                    </span>
-                    <Plus className="size-5 shrink-0 text-primary" aria-hidden />
-                  </button>
-                ))}
-              </div>
-            ) : query.trim().length >= 2 ? (
-              <EmptyState title="No matches" />
-            ) : (
-              <p className="px-1 py-6 text-center text-sm text-muted-foreground">
-                Search for foods to add to this meal
-              </p>
-            )}
-            <Button variant="outline" className="w-full" onClick={() => setPickerOpen(false)}>
-              <X data-icon="inline-start" aria-hidden />
-              Done
-            </Button>
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* Full-screen food picker (search, history, recipes, foods, barcode, voice) */}
+      {pickerOpen ? (
+        <MealFoodPicker onAdd={addFood} onClose={() => setPickerOpen(false)} />
+      ) : null}
     </main>
   );
 }
