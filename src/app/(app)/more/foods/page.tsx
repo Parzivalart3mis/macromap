@@ -1,21 +1,13 @@
 "use client";
 
-import { Search, Trash2 } from "lucide-react";
+import { Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { toast } from "sonner";
 
 import { EmptyState, ListSkeleton } from "@/components/async-states";
 import { SubHeader } from "@/components/more/sub-header";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/client/fetcher";
@@ -64,70 +56,6 @@ function LibraryRow({
   );
 }
 
-/** Saved-meal detail: items + delete. */
-function MealDialog({
-  meal,
-  onOpenChange,
-  onDeleted,
-}: {
-  meal: SavedMealDTO;
-  onOpenChange: (open: boolean) => void;
-  onDeleted: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-
-  async function remove() {
-    if (!window.confirm(`Delete "${meal.name}"?`)) return;
-    setBusy(true);
-    try {
-      await apiFetch(`/api/saved-meals/${meal.id}`, { method: "DELETE" });
-      toast.success(`Deleted ${meal.name}`);
-      onOpenChange(false);
-      onDeleted();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Delete failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{meal.name}</DialogTitle>
-          <DialogDescription>
-            {meal.entriesSnapshotJson.length} items · log it from the diary&apos;s
-            saved-meals tab
-          </DialogDescription>
-        </DialogHeader>
-        <ul className="divide-y rounded-xl border text-sm">
-          {meal.entriesSnapshotJson.map((line, index) => (
-            <li key={index} className="flex justify-between gap-3 px-3 py-2">
-              <span className="min-w-0 truncate">{line.label}</span>
-              <span className="shrink-0 tabular-nums text-muted-foreground">
-                {Math.round(line.nutrition.calories)} cal
-              </span>
-            </li>
-          ))}
-        </ul>
-        {meal.directions ? (
-          <div className="rounded-xl bg-muted/60 p-3 text-sm">
-            <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Directions
-            </p>
-            <p className="whitespace-pre-wrap">{meal.directions}</p>
-          </div>
-        ) : null}
-        <Button variant="destructive" disabled={busy} onClick={remove}>
-          <Trash2 data-icon="inline-start" aria-hidden />
-          {busy ? "Deleting..." : "Delete meal"}
-        </Button>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 const TAB_VALUES = ["recipes", "meals", "foods"] as const;
 
 function MyMealsRecipesFoodsView() {
@@ -141,7 +69,6 @@ function MyMealsRecipesFoodsView() {
     const t = searchParams.get("tab");
     return TAB_VALUES.includes(t as (typeof TAB_VALUES)[number]) ? (t as string) : "recipes";
   });
-  const [openMeal, setOpenMeal] = useState<SavedMealDTO | null>(null);
 
   function loadAll() {
     apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine")
@@ -151,7 +78,6 @@ function MyMealsRecipesFoodsView() {
       .then((data) => setSavedMeals(data.savedMeals))
       .catch(() => setSavedMeals([]));
   }
-  const loadMeals = loadAll;
 
   useEffect(() => {
     loadAll();
@@ -261,7 +187,7 @@ function MyMealsRecipesFoodsView() {
                       title={meal.name}
                       subtitle={`${count} ${count === 1 ? "item" : "items"}`}
                       calories={totalCalories}
-                      onClick={() => setOpenMeal(meal)}
+                      onClick={() => router.push(`/more/foods/meals/${meal.id}`)}
                     />
                   );
                 })}
@@ -309,16 +235,6 @@ function MyMealsRecipesFoodsView() {
           {CTA[tab].label}
         </Button>
       </div>
-
-      {openMeal ? (
-        <MealDialog
-          meal={openMeal}
-          onOpenChange={(open) => {
-            if (!open) setOpenMeal(null);
-          }}
-          onDeleted={loadMeals}
-        />
-      ) : null}
     </main>
   );
 }

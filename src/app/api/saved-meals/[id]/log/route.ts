@@ -6,11 +6,15 @@ import { ApiError, handleApiError, parseBody, requireDbUser } from "@/lib/api";
 import { db } from "@/lib/db";
 import { diaryEntries, foods, savedMeals } from "@/lib/db/schema";
 import { getDiaryPayload, getOrCreateDiaryDay, getOrCreateMeal } from "@/lib/diary/service";
+import { roundNutrition, scaleNutrition } from "@/lib/nutrition";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 const logSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
   mealName: z.string().min(1).max(40),
+  // Scales the whole meal; defaults to one full serving of the template.
+  servings: z.number().positive().max(50).optional(),
+  eatenTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM").optional(),
 });
 
 /** Logs every line of a saved-meal template into the given day and meal. */
@@ -33,16 +37,21 @@ export async function POST(
 
     const day = await getOrCreateDiaryDay(userId, input.date);
     const meal = await getOrCreateMeal(day.id, input.mealName);
+    const servings = input.servings ?? 1;
 
     await db.insert(diaryEntries).values(
       savedMeal.entriesSnapshotJson.map((line) => ({
         diaryMealId: meal.id,
         foodId: line.foodId ?? null,
         customStoreOrderId: line.customStoreOrderId ?? null,
-        quantity: line.quantity,
+        quantity: line.quantity * servings,
         servingMultiplier: line.servingMultiplier,
+        eatenTime: input.eatenTime ?? null,
         loggedVia: "saved_meal" as const,
-        nutritionSnapshotJson: { ...line.nutrition, label: line.label },
+        nutritionSnapshotJson: {
+          ...roundNutrition(scaleNutrition(line.nutrition, servings)),
+          label: line.label,
+        },
       })),
     );
 
