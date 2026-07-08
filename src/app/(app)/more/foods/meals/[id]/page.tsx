@@ -44,7 +44,9 @@ function AddMealView() {
     return m && m.length <= 40 ? m : "Breakfast";
   });
   const [servings, setServings] = useState("1");
+  // Defaults to now only when logging for today; past dates start blank.
   const [eatenTime, setEatenTime] = useState(() => {
+    if (date !== todayISO()) return "";
     const n = new Date();
     return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
   });
@@ -100,7 +102,12 @@ function AddMealView() {
     try {
       await apiFetch(`/api/saved-meals/${id}/log`, {
         method: "POST",
-        body: JSON.stringify({ date, mealName, servings: servingNum, eatenTime }),
+        body: JSON.stringify({
+          date,
+          mealName,
+          servings: servingNum,
+          eatenTime: eatenTime || undefined,
+        }),
       });
       toast.success(`Logged ${meal!.name} to ${mealName}`);
       // Replace so back from the diary skips this completed form.

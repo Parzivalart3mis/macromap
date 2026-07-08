@@ -54,6 +54,16 @@ interface RecentItem {
   lastQuantity: number;
 }
 
+/**
+ * Current wall-clock "HH:MM", but only when logging for today — backfilling a
+ * past date should not claim today's time.
+ */
+function currentTimeIfToday(date: string): string | undefined {
+  if (date !== todayISO()) return undefined;
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
 /** Standard food line: "Brand, serving size" (+ last quantity and calories). */
 function foodSubtitle(food: FoodDTO, quantity = 1): string {
   const serving = `${food.servingSizeValue} ${food.servingSizeUnit}`;
@@ -186,6 +196,7 @@ function SuggestionsReview({
             foodId,
             quantity,
             servingMultiplier: 1,
+            eatenTime: currentTimeIfToday(date),
             loggedVia,
           }),
         });
@@ -372,12 +383,6 @@ function AddFoodView() {
       : undefined;
 
   async function logFood(food: FoodDTO, quantity: number, via: LoggedVia) {
-    // Quick-log stamps the current wall-clock time so the entry lands on the
-    // timeline where it was actually eaten.
-    const now = new Date();
-    const eatenTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-      now.getMinutes(),
-    ).padStart(2, "0")}`;
     await apiFetch("/api/diary/entries", {
       method: "POST",
       body: JSON.stringify({
@@ -386,7 +391,7 @@ function AddFoodView() {
         foodId: food.id,
         quantity,
         servingMultiplier: 1,
-        eatenTime,
+        eatenTime: currentTimeIfToday(date),
         loggedVia: via,
       }),
     });
@@ -471,7 +476,7 @@ function AddFoodView() {
     try {
       await apiFetch(`/api/saved-meals/${savedMeal.id}/log`, {
         method: "POST",
-        body: JSON.stringify({ date, mealName }),
+        body: JSON.stringify({ date, mealName, eatenTime: currentTimeIfToday(date) }),
       });
       toast.success(`Logged ${savedMeal.name} to ${mealName}`);
     } catch (error) {

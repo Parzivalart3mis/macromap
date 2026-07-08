@@ -33,6 +33,14 @@ async function main() {
     returning e.id`;
 
   // Orphaned entries (food deleted): parse a trailing "(Brand)" from the label.
+  // Only accept a trailing "(…)" as a brand when it matches a real brand or
+  // store name — labels like "Soup (cup)" must not backfill "cup" as a brand.
+  const brandRows = await sql`
+    select distinct brand_name as brand from foods where brand_name is not null
+    union select name as brand from stores`;
+  const knownBrands = new Map(
+    (brandRows as { brand: string }[]).map((r) => [r.brand.toLowerCase(), r.brand]),
+  );
   const orphans = await sql`
     select id, nutrition_snapshot_json->>'label' as label
     from diary_entries
@@ -41,9 +49,10 @@ async function main() {
   let parsed = 0;
   for (const o of orphans as { id: string; label: string | null }[]) {
     const m = /\(([^)]+)\)\s*$/.exec(o.label ?? "");
-    if (!m) continue;
+    const brand = m ? knownBrands.get(m[1].trim().toLowerCase()) : undefined;
+    if (!brand) continue;
     await sql`update diary_entries
-      set nutrition_snapshot_json = jsonb_set(nutrition_snapshot_json, '{brand}', to_jsonb(${m[1]}::text))
+      set nutrition_snapshot_json = jsonb_set(nutrition_snapshot_json, '{brand}', to_jsonb(${brand}::text))
       where id = ${o.id}`;
     parsed++;
   }

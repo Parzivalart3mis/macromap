@@ -41,6 +41,8 @@ function CreateMealView() {
   const [busy, setBusy] = useState(false);
   // While an existing meal's items are being loaded for editing.
   const [loading, setLoading] = useState(Boolean(editId));
+  // Saved items that could not be loaded for editing (deleted foods etc.).
+  const [droppedItems, setDroppedItems] = useState(0);
 
   // Add-items full-screen picker
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -67,11 +69,13 @@ function CreateMealView() {
         if (cancelled) return;
         setName(savedMeal.name);
         setDirections(savedMeal.directions ?? "");
-        setItems(
-          foods
-            .map((food, i) => (food ? { food, quantity: lines[i].quantity } : null))
-            .filter((x): x is BuilderItem => x !== null),
-        );
+        const loaded = foods
+          .map((food, i) => (food ? { food, quantity: lines[i].quantity } : null))
+          .filter((x): x is BuilderItem => x !== null);
+        setItems(loaded);
+        // Items whose food no longer exists (or that never had one, e.g. old
+        // custom-build lines) can't be edited — warn before they get dropped.
+        setDroppedItems(savedMeal.entriesSnapshotJson.length - loaded.length);
       } catch (error) {
         if (!cancelled) toast.error(error instanceof Error ? error.message : "Could not load meal");
       } finally {
@@ -172,6 +176,13 @@ function CreateMealView() {
       ) : (
       <>
       <div className="space-y-5 p-4">
+        {droppedItems > 0 ? (
+          <p className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+            {droppedItems} saved {droppedItems === 1 ? "item is" : "items are"} no longer
+            available and {droppedItems === 1 ? "was" : "were"} left out — saving will remove{" "}
+            {droppedItems === 1 ? "it" : "them"} from this meal.
+          </p>
+        ) : null}
         <Input
           placeholder="Name Your Meal"
           value={name}

@@ -12,7 +12,10 @@ export async function GET() {
     const rows = await db
       .select({
         food: foods,
-        lastQuantity: sql<number>`(array_agg(${diaryEntries.quantity} order by ${diaryEntries.createdAt} desc))[1]`,
+        // Effective amount in native servings: quantity is "servings of the
+        // chosen unit", so fold in the unit's multiplier (e.g. 2 × "100 ml" of
+        // a 1-cup food is ~0.85 native servings, not 2).
+        lastQuantity: sql<number>`(round(((array_agg(${diaryEntries.quantity} * ${diaryEntries.servingMultiplier} order by ${diaryEntries.createdAt} desc))[1])::numeric, 2))::float8`,
         lastLoggedAt: sql<string>`max(${diaryEntries.createdAt})`,
       })
       .from(diaryEntries)

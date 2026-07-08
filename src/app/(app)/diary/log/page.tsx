@@ -62,8 +62,10 @@ function LogFoodView() {
   const [unitSheetOpen, setUnitSheetOpen] = useState(false);
   const [factsOpen, setFactsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Wall-clock time eaten, defaults to now.
+  // Wall-clock time eaten. Defaults to now only when logging for today —
+  // backfilling a past date starts blank.
   const [eatenTime, setEatenTime] = useState(() => {
+    if (date !== todayISO()) return "";
     const n = new Date();
     return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
   });
@@ -133,7 +135,7 @@ function LogFoodView() {
           quantity,
           servingMultiplier,
           servingText,
-          eatenTime,
+          eatenTime: eatenTime || undefined,
           loggedVia: via,
         }),
       });

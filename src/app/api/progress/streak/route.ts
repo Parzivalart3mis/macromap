@@ -27,10 +27,11 @@ export async function GET(request: NextRequest) {
       .limit(1000);
 
     const dates = rows.map((row) => row.date);
-    // Recent logged dates power the week-strip checkmarks on the diary.
-    const twoWeeksAgo = new Date(`${today}T12:00:00Z`);
-    twoWeeksAgo.setUTCDate(twoWeeksAgo.getUTCDate() - 13);
-    const cutoff = twoWeeksAgo.toISOString().slice(0, 10);
+    // Recent logged dates power the week-strip checkmarks on the diary. The
+    // strip renders ±35 days around today, so cover at least that far back.
+    const windowStart = new Date(`${today}T12:00:00Z`);
+    windowStart.setUTCDate(windowStart.getUTCDate() - 40);
+    const cutoff = windowStart.toISOString().slice(0, 10);
 
     return NextResponse.json({
       streak: computeStreak(dates, today),
