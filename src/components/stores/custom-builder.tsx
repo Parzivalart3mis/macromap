@@ -32,18 +32,24 @@ export function CustomBuilder({
   const [name, setName] = useState(editOrder?.name ?? "");
   const [selected, setSelected] = useState<Map<string, Selection>>(() => {
     const initial = new Map<string, Selection>();
+    // Reload a saved build's exact selections, skipping any ingredient that no
+    // longer exists (e.g. a menu that was re-seeded). New builds start empty.
     if (editOrder?.items) {
-      // Reload a saved build's exact selections.
+      const validIds = new Set(ingredients.map((ingredient) => ingredient.food.id));
       for (const item of editOrder.items) {
-        initial.set(item.ingredientFoodId, { quantity: item.quantity });
-      }
-    } else {
-      for (const ingredient of ingredients) {
-        if (ingredient.isDefaultSelected) initial.set(ingredient.food.id, { quantity: 1 });
+        if (validIds.has(item.ingredientFoodId)) {
+          initial.set(item.ingredientFoodId, { quantity: item.quantity });
+        }
       }
     }
     return initial;
   });
+  // How many saved ingredients could not be restored (menu changed since saving).
+  const droppedCount = useMemo(() => {
+    if (!editOrder?.items) return 0;
+    const validIds = new Set(ingredients.map((ingredient) => ingredient.food.id));
+    return editOrder.items.filter((item) => !validIds.has(item.ingredientFoodId)).length;
+  }, [editOrder, ingredients]);
   const [saving, setSaving] = useState(false);
   const [logAfterSave, setLogAfterSave] = useState(false);
   const isEdit = Boolean(editOrder);
@@ -149,12 +155,20 @@ export function CustomBuilder({
   return (
     <div className="space-y-4 pb-28">
       {isEdit ? (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-          <span className="font-medium text-primary">Editing “{editOrder!.name}”</span>
-          {onCancelEdit ? (
-            <Button variant="ghost" size="xs" onClick={onCancelEdit}>
-              Cancel
-            </Button>
+        <div className="space-y-1.5 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-primary">Editing “{editOrder!.name}”</span>
+            {onCancelEdit ? (
+              <Button variant="ghost" size="xs" onClick={onCancelEdit}>
+                Cancel
+              </Button>
+            ) : null}
+          </div>
+          {droppedCount > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {droppedCount} saved {droppedCount === 1 ? "ingredient is" : "ingredients are"} no
+              longer on the menu and {droppedCount === 1 ? "was" : "were"} left out.
+            </p>
           ) : null}
         </div>
       ) : null}

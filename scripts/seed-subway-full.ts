@@ -4,9 +4,9 @@
  * into subway-data.json (see parse_subway.py). Full FDA label per item
  * (incl. trans fat, added sugars, and vitamin/mineral %DV).
  *
- * Safe to run on a live DB: old Subway foods are deleted, which sets
- * diary_entries.food_id to NULL while their immutable nutrition snapshots keep
- * history intact.
+ * Non-destructive: foods are upserted by name so their IDs stay stable, which
+ * keeps saved custom builds and diary entries intact across re-seeds. Foods that
+ * drop off the menu are removed only when no saved build references them.
  *
  * Run: pnpm tsx scripts/seed-subway-full.ts
  */
@@ -105,31 +105,66 @@ async function main() {
     process.exit(1);
   }
 
-  // Remove the old catalog (cascades to menu/ingredient rows; diary snapshots kept).
-  const oldMenu = await db
-    .select({ foodId: schema.storeMenuItems.foodId })
-    .from(schema.storeMenuItems)
-    .where(eq(schema.storeMenuItems.storeId, store.id));
-  const oldIngredients = await db
-    .select({ foodId: schema.storeIngredients.foodId })
-    .from(schema.storeIngredients)
-    .where(eq(schema.storeIngredients.storeId, store.id));
-  const oldFoodIds = [...new Set([...oldMenu, ...oldIngredients].map((r) => r.foodId))];
-  for (const part of chunk(oldFoodIds, 100)) {
-    if (part.length > 0) await db.delete(schema.foods).where(inArray(schema.foods.id, part));
-  }
-  console.log(`Removed ${oldFoodIds.length} old Subway foods`);
-
-  // Bulk-insert all foods, then map name -> id (names are unique).
+  // Non-destructive upsert by name: existing foods are updated in place so
+  // their IDs stay stable. This keeps saved custom builds
+  // (custom_store_order_items → foods.id) and diary entries intact across
+  // re-seeds. Names are unique within Subway, so they key the match.
   const allRows = [...data.menu, ...data.ingredients];
-  const idByName = new Map<string, string>();
-  for (const part of chunk(allRows, 100)) {
+  const existing = await db
+    .select({ id: schema.foods.id, name: schema.foods.name })
+    .from(schema.foods)
+    .where(eq(schema.foods.brandName, "Subway"));
+  const idByName = new Map(existing.map((food) => [food.name, food.id]));
+
+  const toInsert = allRows.filter((r) => !idByName.has(r.name));
+  const toUpdate = allRows.filter((r) => idByName.has(r.name));
+
+  // Update existing foods in place (concurrent within each chunk).
+  for (const part of chunk(toUpdate, 25)) {
+    await Promise.all(
+      part.map((r) =>
+        db
+          .update(schema.foods)
+          .set({ ...foodValues(r), updatedAt: new Date() })
+          .where(eq(schema.foods.id, idByName.get(r.name)!)),
+      ),
+    );
+  }
+  // Insert genuinely-new items.
+  for (const part of chunk(toInsert, 100)) {
     const inserted = await db
       .insert(schema.foods)
       .values(part.map(foodValues))
       .returning({ id: schema.foods.id, name: schema.foods.name });
     for (const row of inserted) idByName.set(row.name, row.id);
   }
+  console.log(`Upserted foods: ${toUpdate.length} updated, ${toInsert.length} inserted`);
+
+  // Remove foods that dropped off the menu — but never delete one still
+  // referenced by a saved build (that would orphan it).
+  const newNames = new Set(allRows.map((r) => r.name));
+  const staleIds = existing.filter((f) => !newNames.has(f.name)).map((f) => f.id);
+  let deleted = 0;
+  if (staleIds.length > 0) {
+    const refs = await db
+      .select({ foodId: schema.customStoreOrderItems.ingredientFoodId })
+      .from(schema.customStoreOrderItems)
+      .where(inArray(schema.customStoreOrderItems.ingredientFoodId, staleIds));
+    const referenced = new Set(refs.map((r) => r.foodId));
+    const deletable = staleIds.filter((id) => !referenced.has(id));
+    for (const part of chunk(deletable, 100)) {
+      if (part.length > 0) await db.delete(schema.foods).where(inArray(schema.foods.id, part));
+    }
+    deleted = deletable.length;
+  }
+  console.log(
+    `Stale foods: removed ${deleted}, kept ${staleIds.length - deleted} still used by saved builds`,
+  );
+
+  // Rebuild the store links (menu items + ingredients). These reference foods
+  // but nothing references them, so replacing them is safe and non-orphaning.
+  await db.delete(schema.storeMenuItems).where(eq(schema.storeMenuItems.storeId, store.id));
+  await db.delete(schema.storeIngredients).where(eq(schema.storeIngredients.storeId, store.id));
 
   // Menu items, grouped by category with per-category display order.
   const menuValues: (typeof schema.storeMenuItems.$inferInsert)[] = [];
