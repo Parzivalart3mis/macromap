@@ -128,6 +128,11 @@ export function CustomBuilder({
       );
       if (logNow) {
         const mealName = defaultMealForNow();
+        // Always logs for today, so stamp the current wall-clock time.
+        const now = new Date();
+        const eatenTime = `${String(now.getHours()).padStart(2, "0")}:${String(
+          now.getMinutes(),
+        ).padStart(2, "0")}`;
         await apiFetch("/api/diary/entries", {
           method: "POST",
           body: JSON.stringify({
@@ -136,6 +141,7 @@ export function CustomBuilder({
             customStoreOrderId: order.id,
             quantity: 1,
             servingMultiplier: 1,
+            eatenTime,
             loggedVia: "store_builder",
           }),
         });

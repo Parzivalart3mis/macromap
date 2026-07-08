@@ -95,6 +95,7 @@ function CopyDialog({
             customStoreOrderId: entry.customStoreOrderId ?? undefined,
             quantity: entry.quantity,
             servingMultiplier: entry.servingMultiplier,
+            eatenTime: entry.eatenTime ?? undefined,
             loggedVia: "saved_meal",
           }),
         });
@@ -218,6 +219,7 @@ function MealDetail() {
                         customStoreOrderId: entry.customStoreOrderId ?? undefined,
                         quantity: entry.quantity,
                         servingMultiplier: entry.servingMultiplier,
+                        eatenTime: entry.eatenTime ?? undefined,
                         loggedVia: entry.loggedVia,
                       }),
                     });
