@@ -200,12 +200,14 @@ const INGREDIENTS: Record<string, IngredientRow[]> = {
   Bread: [
     ['6" Artisan Italian Bread', 71, 210, 2, 1, 0, 380, 39, 1, 3, 8, true],
     ['6" Hearty Multigrain Bread', 71, 200, 3, 0, 0, 350, 36, 3, 4, 9],
+    ['6" Italian Herbs & Cheese Bread', 77, 230, 5, 2, 5, 500, 40, 1, 4, 9],
     ['6" Jalapeño Cheddar Bread', 82, 240, 5, 2, 5, 500, 39, 2, 3, 9],
     ['6" Artisan Flatbread', 78, 220, 4, 1, 0, 360, 40, 1, 2, 7],
     ['12" Wrap', 102, 300, 8, 1, 0, 580, 50, 2, 2, 8],
     ['9" Wrap (Pocket)', 52, 150, 3, 1, 0, 340, 26, 0, 0, 4],
     ["Mini Artisan Italian Bread", 47, 140, 2, 1, 0, 250, 26, 0, 2, 5],
     ["Mini Hearty Multigrain Bread", 47, 130, 2, 0, 0, 230, 24, 2, 2, 6],
+    ["Mini Italian Herbs & Cheese Bread", 51, 160, 3.5, 1.5, 5, 340, 27, 1, 3, 6],
   ],
   Protein: [
     ["All-American Club Meats (Ham, Turkey, Bacon)", 72, 140, 8, 3, 45, 650, 2, 0, 1, 15],

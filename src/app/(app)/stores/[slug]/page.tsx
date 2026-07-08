@@ -95,6 +95,10 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
   async function logOrder(order: CustomStoreOrderDTO) {
     setOrderBusy(order.id);
     const mealName = defaultMealForNow();
+    const now = new Date();
+    const eatenTime = `${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes(),
+    ).padStart(2, "0")}`;
     try {
       await apiFetch("/api/diary/entries", {
         method: "POST",
@@ -104,6 +108,7 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
           customStoreOrderId: order.id,
           quantity: 1,
           servingMultiplier: 1,
+          eatenTime,
           loggedVia: "store_builder",
         }),
       });
