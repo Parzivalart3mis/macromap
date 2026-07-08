@@ -48,7 +48,7 @@ export async function PATCH(
       const oldFactor = entry.quantity * entry.servingMultiplier;
       const newFactor = quantity * servingMultiplier;
       const ratio = newFactor / oldFactor;
-      const { label, serving, ...nutrition } = entry.nutritionSnapshotJson;
+      const { label, serving, brand, ...nutrition } = entry.nutritionSnapshotJson;
       const rescaled = roundNutrition(
         scaleNutrition(nutrition as NutritionSnapshot, ratio),
       );
@@ -57,7 +57,7 @@ export async function PATCH(
         /^\s*([\d.]+)/,
         (_, num: string) => `${Math.round(Number(num) * ratio * 100) / 100}`,
       );
-      updates.nutritionSnapshotJson = { ...rescaled, label, serving: nextServing };
+      updates.nutritionSnapshotJson = { ...rescaled, label, serving: nextServing, brand };
     }
 
     if (input.mealName) {

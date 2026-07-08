@@ -111,7 +111,8 @@ function NewFoodForm() {
         setDuplicates(result.similarFoods);
       } else {
         toast.success("Food added to the shared database");
-        router.push(`/foods/${result.foodId}`);
+        // Replace so back from the food page skips this completed form.
+        router.replace(`/foods/${result.foodId}`);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create food");

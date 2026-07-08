@@ -103,7 +103,8 @@ function AddMealView() {
         body: JSON.stringify({ date, mealName, servings: servingNum, eatenTime }),
       });
       toast.success(`Logged ${meal!.name} to ${mealName}`);
-      router.push(date === todayISO() ? "/diary" : `/diary?date=${date}`);
+      // Replace so back from the diary skips this completed form.
+      router.replace(date === todayISO() ? "/diary" : `/diary?date=${date}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Logging failed");
       setBusy(false);

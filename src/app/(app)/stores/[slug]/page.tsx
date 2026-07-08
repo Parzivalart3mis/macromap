@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, Pencil, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Pencil, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
@@ -43,6 +43,9 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
   const [orderBusy, setOrderBusy] = useState<string | null>(null);
   const [tab, setTab] = useState("menu");
   const [editingOrder, setEditingOrder] = useState<CustomStoreOrderDTO | null>(null);
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  // Mirrors editingOrder for the popstate handler (event-handler writes only).
+  const editingRef = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -131,9 +134,29 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
     }
   }
 
+  // Editing pushes a history entry so the back gesture/button exits edit mode
+  // (returning to the Saved tab) instead of leaving the store page.
   function startEdit(order: CustomStoreOrderDTO) {
+    window.history.pushState({ mmStoreEdit: true }, "");
+    editingRef.current = true;
     setEditingOrder(order);
     setTab("builder");
+  }
+
+  useEffect(() => {
+    const onPop = () => {
+      if (!editingRef.current) return;
+      editingRef.current = false;
+      setEditingOrder(null);
+      setTab("saved");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  /** Leave edit mode by popping the pushed entry (keeps history balanced). */
+  function endEdit() {
+    if (editingRef.current) window.history.back();
   }
 
   async function deleteOrder(order: CustomStoreOrderDTO) {
@@ -173,13 +196,14 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
       {/* Store-branded header — accent shifts, layout identical across stores. */}
       <header className="store-header app-chrome sticky top-0 z-30 bg-[var(--store-primary)] px-4 pb-3 text-[var(--store-on-primary)]">
         <div className="flex items-center gap-2 pt-1">
-          <Link
-            href="/food"
-            aria-label="Back to food"
+          <button
+            type="button"
+            aria-label="Back"
             className="flex size-11 items-center justify-center rounded-md hover:bg-white/10"
+            onClick={() => router.back()}
           >
             <ArrowLeft className="size-5" aria-hidden />
-          </Link>
+          </button>
           <h1 className="text-xl font-bold tracking-tight">{info.store.name}</h1>
         </div>
       </header>
@@ -187,9 +211,14 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
       <Tabs
         value={tab}
         onValueChange={(next) => {
+          // Leaving the builder abandons an in-progress edit; consume the
+          // pushed history entry so back stays one-step afterwards.
+          if (next !== "builder" && editingRef.current) {
+            editingRef.current = false;
+            window.history.back();
+            setEditingOrder(null);
+          }
           setTab(next);
-          // Leaving the builder abandons an in-progress edit.
-          if (next !== "builder") setEditingOrder(null);
         }}
         className="p-4"
       >
@@ -297,13 +326,14 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
               editOrder={editingOrder}
               onSaved={() => {
                 reloadOrders();
-                setEditingOrder(null);
-                setTab("saved");
+                if (editingRef.current) {
+                  endEdit();
+                } else {
+                  setEditingOrder(null);
+                  setTab("saved");
+                }
               }}
-              onCancelEdit={() => {
-                setEditingOrder(null);
-                setTab("saved");
-              }}
+              onCancelEdit={endEdit}
             />
           )}
         </TabsContent>
@@ -316,18 +346,50 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
             />
           ) : (
             <ul className="divide-y rounded-xl border bg-card">
-              {orders.map((order) => (
+              {orders.map((order) => {
+                const expanded = expandedOrders.has(order.id);
+                return (
                 <li
                   key={order.id}
                   className="flex items-center justify-between gap-3 px-3 py-2.5"
                 >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{order.name}</span>
+                  {/* Tap the down arrow (or name) to reveal the full build name */}
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    aria-expanded={expanded}
+                    aria-label={`Show full name of ${order.name}`}
+                    onClick={() =>
+                      setExpandedOrders((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(order.id)) next.delete(order.id);
+                        else next.add(order.id);
+                        return next;
+                      })
+                    }
+                  >
+                    <span className="flex items-start gap-1">
+                      <span
+                        className={cn(
+                          "block min-w-0 text-sm font-medium",
+                          expanded ? "break-words whitespace-normal" : "truncate",
+                        )}
+                      >
+                        {order.name}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                          expanded && "rotate-180",
+                        )}
+                        aria-hidden
+                      />
+                    </span>
                     <span className="text-xs text-muted-foreground">
                       {Math.round(order.nutritionSnapshotJson.calories)} kcal ·{" "}
                       {Math.round(order.nutritionSnapshotJson.proteinG)}p
                     </span>
-                  </span>
+                  </button>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -355,7 +417,8 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
                     {orderBusy === order.id ? "..." : "Log"}
                   </Button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </TabsContent>
