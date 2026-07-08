@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states"
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { CustomBuilder } from "@/components/stores/custom-builder";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
@@ -38,6 +39,7 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
   const [orders, setOrders] = useState<CustomStoreOrderDTO[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
+  const [menuQuery, setMenuQuery] = useState("");
   const [orderBusy, setOrderBusy] = useState<string | null>(null);
   const [tab, setTab] = useState("menu");
   const [editingOrder, setEditingOrder] = useState<CustomStoreOrderDTO | null>(null);
@@ -64,10 +66,21 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
     load();
   }, [load]);
 
-  const menuByCategory = useMemo(() => {
+  // With a query, search the whole menu by name/brand; otherwise show the
+  // selected category.
+  const visibleMenu = useMemo(() => {
     if (!menu) return [];
+    const q = menuQuery.trim().toLowerCase();
+    if (q) {
+      return menu.filter(
+        (item) =>
+          item.food.name.toLowerCase().includes(q) ||
+          (item.food.brandName ?? "").toLowerCase().includes(q),
+      );
+    }
     return menu.filter((item) => item.menuCategory === category);
-  }, [menu, category]);
+  }, [menu, category, menuQuery]);
+  const searching = menuQuery.trim().length > 0;
 
   function openLogFood(food: FoodDTO) {
     const p = new URLSearchParams({
@@ -182,7 +195,21 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
         </TabsList>
 
         <TabsContent value="menu" className="space-y-3 pt-3">
-          {info.categories.length > 1 ? (
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              placeholder={`Search the ${info.store.name} menu`}
+              value={menuQuery}
+              onChange={(event) => setMenuQuery(event.target.value)}
+              autoComplete="off"
+              className="h-11 rounded-full pl-10"
+            />
+          </div>
+
+          {!searching && info.categories.length > 1 ? (
             <div className="store-tabs -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
               {info.categories.map((cat) => (
                 <button
@@ -202,11 +229,11 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
             </div>
           ) : null}
 
-          {menuByCategory.length === 0 ? (
-            <EmptyState title="No items in this category" />
+          {visibleMenu.length === 0 ? (
+            <EmptyState title={searching ? "No items match" : "No items in this category"} />
           ) : (
             <ul className="divide-y rounded-xl border bg-card">
-              {menuByCategory.map((item) => (
+              {visibleMenu.map((item) => (
                 <li key={item.id} className="flex items-center gap-1 pr-2">
                   <button
                     type="button"

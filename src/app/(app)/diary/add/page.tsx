@@ -370,6 +370,12 @@ function AddFoodView() {
       : undefined;
 
   async function logFood(food: FoodDTO, quantity: number, via: LoggedVia) {
+    // Quick-log stamps the current wall-clock time so the entry lands on the
+    // timeline where it was actually eaten.
+    const now = new Date();
+    const eatenTime = `${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes(),
+    ).padStart(2, "0")}`;
     await apiFetch("/api/diary/entries", {
       method: "POST",
       body: JSON.stringify({
@@ -378,6 +384,7 @@ function AddFoodView() {
         foodId: food.id,
         quantity,
         servingMultiplier: 1,
+        eatenTime,
         loggedVia: via,
       }),
     });

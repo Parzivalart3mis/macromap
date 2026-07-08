@@ -50,27 +50,28 @@ function foodSubtitle(food: FoodDTO): string {
   return `${base} · ${Math.round(food.calories)} cal`;
 }
 
-/** Row whose whole body (and the + button) adds the food to the meal. */
+/**
+ * Row: tapping the body opens the serving-size detail; the + button adds one
+ * serving straight to the meal.
+ */
 function AddRow({
   title,
   subtitle,
   description,
   verified,
+  onOpen,
   onAdd,
 }: {
   title: string;
   subtitle: string;
   description?: string | null;
   verified?: boolean;
+  onOpen: () => void;
   onAdd: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onAdd}
-      className="card-lift flex w-full items-center gap-2 rounded-2xl border bg-card p-3 text-left shadow-[var(--shadow-soft)]"
-    >
-      <span className="min-w-0 flex-1">
+    <div className="card-lift flex items-center gap-2 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]">
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[15px] font-semibold">{title}</span>
           {verified ? <VerifiedBadge /> : null}
@@ -81,9 +82,17 @@ function AddRow({
             {description}
           </span>
         ) : null}
-      </span>
-      <PlusCircle className="size-5 shrink-0 text-primary" aria-hidden />
-    </button>
+      </button>
+      <Button
+        variant="secondary"
+        size="icon-sm"
+        aria-label={`Add ${title}`}
+        onClick={onAdd}
+        className="shrink-0 rounded-full text-primary"
+      >
+        <PlusCircle className="size-5" aria-hidden />
+      </Button>
+    </div>
   );
 }
 
@@ -167,14 +176,19 @@ export function MealFoodPicker({
     searchTimer.current = setTimeout(() => fetchResults(value), 250);
   }
 
-  async function importExternal(result: ExternalFoodResultDTO, index: number) {
+  async function importExternal(
+    result: ExternalFoodResultDTO,
+    index: number,
+    mode: "detail" | "add",
+  ) {
     setImportingIndex(index);
     try {
       const { food } = await apiFetch<{ food: FoodDTO }>("/api/foods/import", {
         method: "POST",
         body: JSON.stringify(result),
       });
-      setDetail(food);
+      if (mode === "add") added(food);
+      else setDetail(food);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Import failed");
     } finally {
@@ -444,7 +458,8 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onAdd={() => setDetail(food)}
+                      onOpen={() => setDetail(food)}
+                      onAdd={() => added(food)}
                     />
                   ))}
                 </div>
@@ -460,8 +475,15 @@ export function MealFoodPicker({
                         key={`${result.source}-${result.barcode ?? index}`}
                         title={result.name}
                         subtitle={`${result.brandName ? `${result.brandName}, ` : ""}${result.servingSizeValue} ${result.servingSizeUnit} · ${Math.round(result.calories)} cal · ${result.source === "usda" ? "USDA" : "Open Food Facts"}`}
+                        onOpen={() =>
+                          importingIndex === null
+                            ? importExternal(result, index, "detail")
+                            : undefined
+                        }
                         onAdd={() =>
-                          importingIndex === null ? importExternal(result, index) : undefined
+                          importingIndex === null
+                            ? importExternal(result, index, "add")
+                            : undefined
                         }
                       />
                     ))}
@@ -502,7 +524,8 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onAdd={() => setDetail(food)}
+                      onOpen={() => setDetail(food)}
+                      onAdd={() => added(food)}
                     />
                   ))}
                 </div>
@@ -523,7 +546,8 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onAdd={() => setDetail(food)}
+                      onOpen={() => setDetail(food)}
+                      onAdd={() => added(food)}
                     />
                   ))}
                 </div>
@@ -544,7 +568,8 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onAdd={() => setDetail(food)}
+                      onOpen={() => setDetail(food)}
+                      onAdd={() => added(food)}
                     />
                   ))}
                 </div>
@@ -652,6 +677,7 @@ function MealFoodDetail({
               inputMode="decimal"
               autoComplete="off"
               value={servings}
+              onFocus={(event) => event.currentTarget.select()}
               onChange={(event) => {
                 const raw = event.target.value.replace(/[^0-9.]/g, "");
                 const parts = raw.split(".");
