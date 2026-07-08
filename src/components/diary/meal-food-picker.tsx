@@ -33,7 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useVoiceLogging } from "@/hooks/useVoiceLogging";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
-import { computeServing, servingOptions, type UnitOption } from "@/lib/units";
+import { computeServing, formatNum, servingOptions, type UnitOption } from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type {
   ExternalFoodResultDTO,
@@ -119,11 +119,37 @@ export function MealFoodPicker({
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Tabs data (My Foods = created non-recipes, My Recipes = created recipes)
-  const [recent, setRecent] = useState<FoodDTO[] | null>(null);
+  const [recent, setRecent] = useState<{ food: FoodDTO; lastQuantity: number }[] | null>(null);
   const [myFoods, setMyFoods] = useState<FoodDTO[] | null>(null);
 
-  // A tapped food opens the serving-size detail step before it is added.
-  const [detail, setDetail] = useState<FoodDTO | null>(null);
+  // A tapped food opens the serving-size detail step (pre-filled with the
+  // servings to start from) before it is added.
+  const [detail, setDetail] = useState<{ food: FoodDTO; servings: number } | null>(null);
+
+  // Back gesture / button closes the top overlay layer (detail → list → picker)
+  // instead of leaving the builder route and losing the in-progress meal.
+  const onCloseRef = useRef(onClose);
+  const hasDetailRef = useRef(false);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    hasDetailRef.current = detail !== null;
+  });
+  useEffect(() => {
+    window.history.pushState({ mmMealPicker: true }, "");
+    const onPop = () => {
+      if (hasDetailRef.current) setDetail(null);
+      else onCloseRef.current();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  function openDetail(food: FoodDTO, servings = 1) {
+    window.history.pushState({ mmMealDetail: true }, "");
+    setDetail({ food, servings });
+  }
+  // Pops the pushed history entry; the popstate handler updates state.
+  const closeTop = () => window.history.back();
 
   // Modes
   const [mode, setMode] = useState<Mode>(null);
@@ -137,8 +163,8 @@ export function MealFoodPicker({
   const [review, setReview] = useState<NaturalLogSuggestionDTO[] | null>(null);
 
   useEffect(() => {
-    apiFetch<{ recent: { food: FoodDTO }[] }>("/api/diary/recent")
-      .then((data) => setRecent(data.recent.map((item) => item.food)))
+    apiFetch<{ recent: { food: FoodDTO; lastQuantity: number }[] }>("/api/diary/recent")
+      .then((data) => setRecent(data.recent))
       .catch(() => setRecent([]));
     apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine")
       .then((data) => setMyFoods(data.foods))
@@ -188,7 +214,7 @@ export function MealFoodPicker({
         body: JSON.stringify(result),
       });
       if (mode === "add") added(food);
-      else setDetail(food);
+      else openDetail(food);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Import failed");
     } finally {
@@ -207,7 +233,7 @@ export function MealFoodPicker({
       );
       if (result.food) {
         setBarcodeValue("");
-        setDetail(result.food);
+        openDetail(result.food);
       } else {
         setBarcodeMiss(code);
       }
@@ -407,11 +433,11 @@ export function MealFoodPicker({
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       <header className="top-header app-chrome glass sticky top-0 z-30 border-b border-border/60 px-4 pb-3">
         <div className="flex items-center gap-2 pt-2">
-          <Button variant="ghost" size="icon-sm" aria-label="Back to meal" onClick={onClose}>
+          <Button variant="ghost" size="icon-sm" aria-label="Back to meal" onClick={closeTop}>
             <ArrowLeft aria-hidden />
           </Button>
           <h2 className="flex-1 text-center text-lg font-bold">Add Food</h2>
-          <Button variant="ghost" size="sm" className="font-bold text-primary" onClick={onClose}>
+          <Button variant="ghost" size="sm" className="font-bold text-primary" onClick={closeTop}>
             Done
           </Button>
         </div>
@@ -458,7 +484,7 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onOpen={() => setDetail(food)}
+                      onOpen={() => openDetail(food)}
                       onAdd={() => added(food)}
                     />
                   ))}
@@ -517,15 +543,15 @@ export function MealFoodPicker({
                 />
               ) : (
                 <div className="stagger-children space-y-2">
-                  {recent.map((food) => (
+                  {recent.map(({ food, lastQuantity }) => (
                     <AddRow
                       key={food.id}
                       title={food.name}
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onOpen={() => setDetail(food)}
-                      onAdd={() => added(food)}
+                      onOpen={() => openDetail(food, lastQuantity)}
+                      onAdd={() => added(food, lastQuantity)}
                     />
                   ))}
                 </div>
@@ -546,7 +572,7 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onOpen={() => setDetail(food)}
+                      onOpen={() => openDetail(food)}
                       onAdd={() => added(food)}
                     />
                   ))}
@@ -568,7 +594,7 @@ export function MealFoodPicker({
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onOpen={() => setDetail(food)}
+                      onOpen={() => openDetail(food)}
                       onAdd={() => added(food)}
                     />
                   ))}
@@ -581,11 +607,12 @@ export function MealFoodPicker({
 
       {detail ? (
         <MealFoodDetail
-          food={detail}
-          onBack={() => setDetail(null)}
+          food={detail.food}
+          initialServings={detail.servings}
+          onBack={closeTop}
           onConfirm={(quantity) => {
-            added(detail, quantity);
-            setDetail(null);
+            added(detail.food, quantity);
+            closeTop();
           }}
         />
       ) : null}
@@ -600,16 +627,18 @@ export function MealFoodPicker({
  */
 function MealFoodDetail({
   food,
+  initialServings = 1,
   onConfirm,
   onBack,
 }: {
   food: FoodDTO;
+  initialServings?: number;
   onConfirm: (quantity: number) => void;
   onBack: () => void;
 }) {
   const options = servingOptions(food);
   const [option, setOption] = useState<UnitOption>(options[0]);
-  const [servings, setServings] = useState("1");
+  const [servings, setServings] = useState(() => formatNum(initialServings));
   const [unitSheetOpen, setUnitSheetOpen] = useState(false);
   const [factsOpen, setFactsOpen] = useState(false);
 

@@ -73,6 +73,9 @@ for raw in TXT.splitlines():
         if not name: anomalies.append(s[:80]); continue
         if section=="BREADS & INGREDIENTS":
             group=GROUP_MAP.get(sub or "", sub or "Other")
+            # Sliced cheeses are served as 2 slices; label them so.
+            if group=="Cheese" and name in {"American","Pepper Jack","Provolone"}:
+                name += " (2 slices)"
             ingredients.append({"group":group,"name":name,
                 "default": (group=="Bread" and "Artisan Italian" in name) or name in DEFAULT_VEG,
                 **vals})

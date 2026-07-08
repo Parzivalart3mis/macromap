@@ -26,7 +26,7 @@ import {
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { computeServing, servingOptions, type UnitOption } from "@/lib/units";
+import { computeServing, formatNum, servingOptions, type UnitOption } from "@/lib/units";
 import type { DiaryPayloadDTO, FoodDTO, GoalDTO } from "@/types/api";
 
 const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"];
@@ -53,7 +53,11 @@ function LogFoodView() {
     const m = params.get("meal");
     return m && m.length <= 40 ? m : "Snacks";
   });
-  const [servings, setServings] = useState("1");
+  // Opening from History pre-fills the last-used serving count.
+  const [servings, setServings] = useState(() => {
+    const n = Number(params.get("servings"));
+    return Number.isFinite(n) && n > 0 ? formatNum(n) : "1";
+  });
   const [option, setOption] = useState<UnitOption | null>(null);
   const [unitSheetOpen, setUnitSheetOpen] = useState(false);
   const [factsOpen, setFactsOpen] = useState(false);

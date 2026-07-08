@@ -272,8 +272,10 @@ function AddFoodView() {
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
 
   // Tapping a food opens the full-page log screen (with the unit selector).
-  function openLog(id: string, via: LoggedVia) {
+  // `servings` pre-fills the count (used by History to restore the last amount).
+  function openLog(id: string, via: LoggedVia, servings?: number) {
     const p = new URLSearchParams({ foodId: id, date, meal: mealName, via });
+    if (servings && servings > 0) p.set("servings", String(servings));
     router.push(`/diary/log?${p.toString()}`);
   }
 
@@ -839,7 +841,7 @@ function AddFoodView() {
                           description={food.description}
                           verified={food.isVerified}
                           busy={quickBusy === food.id}
-                          onOpen={() => openLog(food.id, "search")}
+                          onOpen={() => openLog(food.id, "search", lastQuantity)}
                           onQuickLog={() => quickLog(food, lastQuantity)}
                         />
                       ))}

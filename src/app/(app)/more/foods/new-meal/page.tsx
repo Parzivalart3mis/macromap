@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ChevronDown, ChevronUp, Minus, Plus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { ListSkeleton } from "@/components/async-states";
@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/client/fetcher";
 import { roundNutrition, scaleNutrition, sumNutrition } from "@/lib/nutrition";
 import { dtoNutrition } from "@/lib/units";
-import type { FoodDTO } from "@/types/api";
+import type { FoodDTO, SavedMealDTO } from "@/types/api";
 
 interface BuilderItem {
   food: FoodDTO;
@@ -33,14 +33,55 @@ function CreateMealView() {
   const returnTab = LIBRARY_TABS.includes(fromParam as (typeof LIBRARY_TABS)[number])
     ? (fromParam as string)
     : "meals";
+  const editId = searchParams.get("edit");
   const [name, setName] = useState("");
   const [directions, setDirections] = useState("");
   const [items, setItems] = useState<BuilderItem[]>([]);
   const [factsOpen, setFactsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // While an existing meal's items are being loaded for editing.
+  const [loading, setLoading] = useState(Boolean(editId));
 
   // Add-items full-screen picker
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Edit mode: load the saved meal + its foods and pre-fill the builder.
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { savedMeal } = await apiFetch<{
+          savedMeal: Pick<SavedMealDTO, "name" | "directions"> & {
+            entriesSnapshotJson: { foodId?: string; quantity: number }[];
+          };
+        }>(`/api/saved-meals/${editId}`);
+        const lines = savedMeal.entriesSnapshotJson.filter((l) => l.foodId);
+        const foods = await Promise.all(
+          lines.map((l) =>
+            apiFetch<{ food: FoodDTO }>(`/api/foods/${l.foodId}`)
+              .then((r) => r.food)
+              .catch(() => null),
+          ),
+        );
+        if (cancelled) return;
+        setName(savedMeal.name);
+        setDirections(savedMeal.directions ?? "");
+        setItems(
+          foods
+            .map((food, i) => (food ? { food, quantity: lines[i].quantity } : null))
+            .filter((x): x is BuilderItem => x !== null),
+        );
+      } catch (error) {
+        if (!cancelled) toast.error(error instanceof Error ? error.message : "Could not load meal");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editId]);
 
   const totals = roundNutrition(
     sumNutrition(items.map((item) => scaleNutrition(dtoNutrition(item.food), item.quantity))),
@@ -80,15 +121,17 @@ function CreateMealView() {
     }
     setBusy(true);
     try {
-      await apiFetch("/api/saved-meals/build", {
-        method: "POST",
-        body: JSON.stringify({
-          name: name.trim(),
-          directions: directions.trim() || undefined,
-          items: items.map((item) => ({ foodId: item.food.id, quantity: item.quantity })),
-        }),
+      const body = JSON.stringify({
+        name: name.trim(),
+        directions: directions.trim() || undefined,
+        items: items.map((item) => ({ foodId: item.food.id, quantity: item.quantity })),
       });
-      toast.success("Meal saved");
+      if (editId) {
+        await apiFetch(`/api/saved-meals/${editId}`, { method: "PATCH", body });
+      } else {
+        await apiFetch("/api/saved-meals/build", { method: "POST", body });
+      }
+      toast.success(editId ? "Meal updated" : "Meal saved");
       // Return to the originating library tab (fresh mount refetches the list).
       router.replace(`/more/foods?tab=${returnTab}`);
     } catch (error) {
@@ -111,7 +154,7 @@ function CreateMealView() {
           >
             <ArrowLeft aria-hidden />
           </Button>
-          <h1 className="text-lg font-bold">Create a Meal</h1>
+          <h1 className="text-lg font-bold">{editId ? "Edit a Meal" : "Create a Meal"}</h1>
           <Button
             variant="ghost"
             size="sm"
@@ -124,6 +167,10 @@ function CreateMealView() {
         </div>
       </header>
 
+      {loading ? (
+        <ListSkeleton rows={6} />
+      ) : (
+      <>
       <div className="space-y-5 p-4">
         <Input
           placeholder="Name Your Meal"
@@ -285,6 +332,8 @@ function CreateMealView() {
       {pickerOpen ? (
         <MealFoodPicker onAdd={addFood} onClose={() => setPickerOpen(false)} />
       ) : null}
+      </>
+      )}
     </main>
   );
 }

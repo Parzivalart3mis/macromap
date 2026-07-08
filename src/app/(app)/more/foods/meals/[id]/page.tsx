@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -293,6 +293,15 @@ function AddMealView() {
             <p className="whitespace-pre-wrap">{meal.directions}</p>
           </section>
         ) : null}
+
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => router.push(`/more/foods/new-meal?edit=${id}&from=meals`)}
+        >
+          <Pencil data-icon="inline-start" aria-hidden />
+          Edit meal
+        </Button>
 
         <Button variant="destructive" className="w-full" disabled={deleting} onClick={remove}>
           <Trash2 data-icon="inline-start" aria-hidden />

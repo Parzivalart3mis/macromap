@@ -3766,7 +3766,7 @@
 },
 {
 "group": "Cheese",
-"name": "American",
+"name": "American (2 slices)",
 "default": false,
 "serving": 23.0,
 "cal": 80.0,
@@ -3829,7 +3829,7 @@
 },
 {
 "group": "Cheese",
-"name": "Pepper Jack",
+"name": "Pepper Jack (2 slices)",
 "default": false,
 "serving": 28.0,
 "cal": 100.0,
@@ -3850,7 +3850,7 @@
 },
 {
 "group": "Cheese",
-"name": "Provolone",
+"name": "Provolone (2 slices)",
 "default": false,
 "serving": 25.0,
 "cal": 90.0,
