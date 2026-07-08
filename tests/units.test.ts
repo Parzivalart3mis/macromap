@@ -19,6 +19,7 @@ function food(overrides: Partial<FoodDTO>): FoodDTO {
     sourceType: "user_created",
     servingSizeValue: 1,
     servingSizeUnit: "serving",
+    alternateServings: [],
     calories: 100,
     proteinG: 10,
     carbsG: 20,
@@ -99,6 +100,20 @@ describe("servingOptions", () => {
     const opts = servingOptions(food({ servingSizeValue: 100, servingSizeUnit: "g" }));
     const hundredGram = opts.filter((o) => Math.abs(o.baseAmount - 100) < 0.001);
     expect(hundredGram).toHaveLength(1);
+  });
+
+  it("adds user-defined alternate servings, even for count foods", () => {
+    const opts = servingOptions(
+      food({
+        servingSizeValue: 1,
+        servingSizeUnit: "packet",
+        alternateServings: [{ unit: "scoop", multiplier: 0.5 }],
+      }),
+    );
+    const scoop = opts.find((o) => o.label === "1 scoop");
+    expect(scoop).toBeDefined();
+    // Half a packet's worth of the base measure.
+    expect(scoop!.baseAmount).toBeCloseTo(0.5);
   });
 });
 

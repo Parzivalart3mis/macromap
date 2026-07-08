@@ -24,12 +24,18 @@ export const nutritionFieldsSchema = z.object({
   vitaminDPct: z.number().nonnegative().optional(),
 });
 
+const alternateServingSchema = z.object({
+  unit: z.string().min(1).max(20),
+  multiplier: z.number().positive().max(1000),
+});
+
 export const createFoodSchema = nutritionFieldsSchema.extend({
   name: z.string().min(1).max(200),
   brandName: z.string().max(100).optional(),
   description: z.string().max(500).optional(),
   servingSizeValue: z.number().positive(),
   servingSizeUnit: z.string().min(1).max(20),
+  alternateServings: z.array(alternateServingSchema).max(12).optional(),
   barcode: z.string().min(8).max(32).optional(),
   forceCreate: z.boolean().default(false),
 });
@@ -42,6 +48,7 @@ export const updateFoodSchema = nutritionFieldsSchema
     description: z.string().max(500).nullable().optional(),
     servingSizeValue: z.number().positive().optional(),
     servingSizeUnit: z.string().min(1).max(20).optional(),
+    alternateServings: z.array(alternateServingSchema).max(12).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required",

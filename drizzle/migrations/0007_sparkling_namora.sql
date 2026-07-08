@@ -1,0 +1,1 @@
+ALTER TABLE "foods" ADD COLUMN "alternate_servings_json" jsonb DEFAULT '[]'::jsonb NOT NULL;

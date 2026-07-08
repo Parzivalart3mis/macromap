@@ -5,6 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  AlternateServingsEditor,
+  type ServingDraft,
+  servingsFromDrafts,
+} from "@/components/foods/alternate-servings-editor";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +67,7 @@ function NewFoodForm() {
   const [servingValue, setServingValue] = useState("1");
   const [servingUnit, setServingUnit] = useState("serving");
   const [barcode, setBarcode] = useState(searchParams.get("barcode") ?? "");
+  const [altServings, setAltServings] = useState<ServingDraft[]>([]);
   const [numbers, setNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [duplicates, setDuplicates] = useState<SimilarFood[] | null>(null);
@@ -76,6 +82,8 @@ function NewFoodForm() {
     if (brandName.trim()) payload.brandName = brandName.trim();
     if (description.trim()) payload.description = description.trim();
     if (barcode.trim()) payload.barcode = barcode.trim();
+    const alternateServings = servingsFromDrafts(altServings);
+    if (alternateServings.length > 0) payload.alternateServings = alternateServings;
     for (const field of NUMBER_FIELDS) {
       const raw = numbers[field.key];
       if (raw != null && raw !== "") payload[field.key] = Number(raw);
@@ -178,6 +186,13 @@ function NewFoodForm() {
             onChange={(event) => setBarcode(event.target.value.replace(/\D/g, ""))}
           />
         </div>
+
+        <AlternateServingsEditor
+          drafts={altServings}
+          onChange={setAltServings}
+          baseValue={Number(servingValue)}
+          baseUnit={servingUnit}
+        />
 
         <h2 className="pt-2 text-sm font-semibold">Nutrition per serving</h2>
         <div className="grid grid-cols-2 gap-3">

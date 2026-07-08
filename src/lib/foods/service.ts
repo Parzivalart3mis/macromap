@@ -132,11 +132,12 @@ export type EditableFoodField = (typeof EDITABLE_FOOD_FIELDS)[number];
 
 export async function applyFoodEdit(
   food: Food,
-  changes: Partial<Pick<Food, EditableFoodField>>,
+  changes: Partial<Pick<Food, EditableFoodField | "alternateServings">>,
   editedByUserId: string,
-): Promise<{ changedFields: EditableFoodField[] }> {
-  const changedFields: EditableFoodField[] = [];
+): Promise<{ changedFields: string[] }> {
+  const changedFields: string[] = [];
   const updates: Record<string, unknown> = {};
+  const history: Array<{ field: string; oldValue: string | null; newValue: string | null }> = [];
 
   for (const field of EDITABLE_FOOD_FIELDS) {
     if (!(field in changes)) continue;
@@ -144,6 +145,23 @@ export async function applyFoodEdit(
     if (next === undefined || next === food[field]) continue;
     changedFields.push(field);
     updates[field] = next;
+    history.push({
+      field,
+      oldValue: food[field] == null ? null : String(food[field]),
+      newValue: next == null ? null : String(next),
+    });
+  }
+
+  // Alternate servings is an array, tracked as one JSON history entry.
+  const nextAlt = changes.alternateServings;
+  if (nextAlt !== undefined && JSON.stringify(nextAlt) !== JSON.stringify(food.alternateServings)) {
+    changedFields.push("alternateServings");
+    updates.alternateServings = nextAlt;
+    history.push({
+      field: "alternateServings",
+      oldValue: JSON.stringify(food.alternateServings),
+      newValue: JSON.stringify(nextAlt),
+    });
   }
 
   if (changedFields.length === 0) return { changedFields };
@@ -154,12 +172,12 @@ export async function applyFoodEdit(
     .where(eq(foods.id, food.id));
 
   await db.insert(foodEditHistory).values(
-    changedFields.map((field) => ({
+    history.map((entry) => ({
       foodId: food.id,
       editedByUserId,
-      fieldChanged: field,
-      oldValue: food[field] == null ? null : String(food[field]),
-      newValue: changes[field] == null ? null : String(changes[field]),
+      fieldChanged: entry.field,
+      oldValue: entry.oldValue,
+      newValue: entry.newValue,
     })),
   );
 

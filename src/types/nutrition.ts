@@ -47,6 +47,16 @@ export const NUTRITION_KEYS = [
 
 export type NutritionKey = (typeof NUTRITION_KEYS)[number];
 
+/**
+ * An extra serving size a food can be logged in, expressed as a multiple of the
+ * food's base serving. Example: base "1 packet"; alternate { unit: "scoop",
+ * multiplier: 0.5 } means one scoop is half a packet's nutrition.
+ */
+export interface AlternateServing {
+  unit: string;
+  multiplier: number;
+}
+
 /** One line of a reusable saved-meal template. */
 export interface SavedMealEntrySnapshot {
   label: string;

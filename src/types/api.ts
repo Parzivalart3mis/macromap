@@ -1,4 +1,4 @@
-import type { NutritionSnapshot } from "./nutrition";
+import type { AlternateServing, NutritionSnapshot } from "./nutrition";
 
 /** Client-side DTOs — server rows after JSON serialization (dates as strings). */
 
@@ -11,6 +11,7 @@ export interface FoodDTO {
   sourceType: "official_store" | "barcode_api" | "open_food_facts" | "user_created";
   servingSizeValue: number;
   servingSizeUnit: string;
+  alternateServings: AlternateServing[];
   calories: number;
   proteinG: number;
   carbsG: number;

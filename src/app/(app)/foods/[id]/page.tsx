@@ -7,6 +7,12 @@ import { use, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
+import {
+  AlternateServingsEditor,
+  type ServingDraft,
+  draftsFromServings,
+  servingsFromDrafts,
+} from "@/components/foods/alternate-servings-editor";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { NutritionPanel } from "@/components/nutrition/nutrition-panel";
 import { PageHeader } from "@/components/shell/page-header";
@@ -72,6 +78,9 @@ function EditFoodDialog({
   const [servingValue, setServingValue] = useState(String(food.servingSizeValue));
   const [servingUnit, setServingUnit] = useState(food.servingSizeUnit);
   const [description, setDescription] = useState(food.description ?? "");
+  const [altServings, setAltServings] = useState<ServingDraft[]>(() =>
+    draftsFromServings(food.alternateServings),
+  );
   const [values, setValues] = useState<Record<string, string>>(() => {
     const next: Record<string, string> = {};
     for (const field of EDIT_FIELDS) {
@@ -97,6 +106,10 @@ function EditFoodDialog({
     }
     if (description.trim() !== (food.description ?? "")) {
       payload.description = description.trim() || null;
+    }
+    const nextAlt = servingsFromDrafts(altServings);
+    if (JSON.stringify(nextAlt) !== JSON.stringify(food.alternateServings)) {
+      payload.alternateServings = nextAlt;
     }
     for (const field of EDIT_FIELDS) {
       const raw = values[field.key];
@@ -191,6 +204,12 @@ function EditFoodDialog({
             onChange={(event) => setDescription(event.target.value)}
           />
         </div>
+        <AlternateServingsEditor
+          drafts={altServings}
+          onChange={setAltServings}
+          baseValue={Number(servingValue)}
+          baseUnit={servingUnit}
+        />
         <div className="grid grid-cols-2 gap-3">
           {EDIT_FIELDS.map((field) => (
             <div key={field.key} className="space-y-1">

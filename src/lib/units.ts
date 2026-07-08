@@ -117,6 +117,12 @@ export function servingOptions(food: FoodDTO): UnitOption[] {
   // Native serving first (uses the food's own unit string).
   push(food.servingSizeValue, food.servingSizeUnit, base);
 
+  // User-defined extra serving sizes, each a multiple of the base serving.
+  // Added for every food kind (including count-based).
+  for (const alt of food.alternateServings ?? []) {
+    add(1, alt.unit, alt.multiplier * base);
+  }
+
   if (kind === "count") return options;
 
   const table = kind === "volume" ? VOLUME : WEIGHT;

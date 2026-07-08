@@ -14,7 +14,11 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import type { NutritionSnapshot, SavedMealEntrySnapshot } from "@/types/nutrition";
+import type {
+  AlternateServing,
+  NutritionSnapshot,
+  SavedMealEntrySnapshot,
+} from "@/types/nutrition";
 
 export const unitSystemEnum = pgEnum("unit_system", ["metric", "imperial"]);
 
@@ -101,6 +105,11 @@ export const foods = pgTable(
     }),
     servingSizeValue: doublePrecision("serving_size_value").notNull(),
     servingSizeUnit: text("serving_size_unit").notNull(),
+    // Optional extra serving sizes, each a multiple of the base serving.
+    alternateServings: jsonb("alternate_servings_json")
+      .$type<AlternateServing[]>()
+      .notNull()
+      .default([]),
     calories: doublePrecision("calories").notNull(),
     proteinG: doublePrecision("protein_g").notNull(),
     carbsG: doublePrecision("carbs_g").notNull(),
