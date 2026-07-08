@@ -10,6 +10,7 @@ import {
   foods,
   goalDays,
   goalProfiles,
+  stores,
   type DiaryEntry,
   type DiaryMeal,
   type Food,
@@ -68,7 +69,12 @@ export async function getOrCreateMeal(diaryDayId: string, mealName: string) {
 
 export interface EntrySource {
   food?: Food;
-  order?: { id: string; name: string; nutritionSnapshotJson: NutritionSnapshot };
+  order?: {
+    id: string;
+    name: string;
+    nutritionSnapshotJson: NutritionSnapshot;
+    storeName: string | null;
+  };
 }
 
 export async function resolveEntrySource(
@@ -82,9 +88,16 @@ export async function resolveEntrySource(
     return { food };
   }
   if (customStoreOrderId) {
+    // Join the store so the entry can record the store as its brand.
     const [order] = await db
-      .select()
+      .select({
+        id: customStoreOrders.id,
+        name: customStoreOrders.name,
+        nutritionSnapshotJson: customStoreOrders.nutritionSnapshotJson,
+        storeName: stores.name,
+      })
       .from(customStoreOrders)
+      .leftJoin(stores, eq(stores.id, customStoreOrders.storeId))
       .where(
         and(
           eq(customStoreOrders.id, customStoreOrderId),
@@ -103,7 +116,7 @@ export function buildEntrySnapshot(
   quantity: number,
   servingMultiplier: number,
   servingText?: string,
-): NutritionSnapshot & { label: string; serving?: string } {
+): NutritionSnapshot & { label: string; serving?: string; brand?: string } {
   const factor = quantity * servingMultiplier;
   const serving = servingText?.trim() || undefined;
   if (source.food) {
@@ -111,13 +124,19 @@ export function buildEntrySnapshot(
     const label = source.food.brandName
       ? `${source.food.name} (${source.food.brandName})`
       : source.food.name;
-    return { ...roundNutrition(scaleNutrition(base, factor)), label, serving };
+    return {
+      ...roundNutrition(scaleNutrition(base, factor)),
+      label,
+      serving,
+      brand: source.food.brandName ?? undefined,
+    };
   }
   if (source.order) {
     return {
       ...roundNutrition(scaleNutrition(source.order.nutritionSnapshotJson, factor)),
       label: source.order.name,
       serving,
+      brand: source.order.storeName ?? undefined,
     };
   }
   throw new ApiError("invalid_request", "Entry source missing", 400);

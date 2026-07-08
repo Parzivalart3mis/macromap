@@ -89,6 +89,17 @@ export function EntryEditDialog({
     valid ? quantity / entry.quantity : 0,
   );
 
+  // Prefer the live food's brand/serving; fall back to the values captured on
+  // the entry (so store items and custom builds still show their store, even if
+  // the underlying food record changed or was removed).
+  const brand = food?.brandName ?? snapshot.brand ?? null;
+  const servingText = food
+    ? `${food.servingSizeValue} ${food.servingSizeUnit}`
+    : (snapshot.serving ?? null);
+  const sourceLine =
+    [brand, servingText].filter(Boolean).join(", ") ||
+    (entry.customStoreOrderId ? "Custom build" : "Generic");
+
   async function save() {
     if (!valid) {
       toast.error("Servings must be a positive number");
@@ -163,13 +174,7 @@ export function EntryEditDialog({
           <DialogTitle className="diary-entry-text text-lg leading-snug">
             {label}
           </DialogTitle>
-          <DialogDescription>
-            {food
-              ? `${food.brandName ? `${food.brandName}, ` : ""}${food.servingSizeValue} ${food.servingSizeUnit}`
-              : entry.customStoreOrderId
-                ? "Custom build"
-                : "Generic"}
-          </DialogDescription>
+          <DialogDescription>{sourceLine}</DialogDescription>
           {food?.description ? (
             <p className="diary-entry-text rounded-xl bg-muted/60 px-3 py-2 text-left text-sm text-foreground/80">
               {food.description}

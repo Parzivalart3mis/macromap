@@ -305,7 +305,7 @@ export const diaryEntries = pgTable(
     // Wall-clock time the food was eaten, "HH:MM" (user-picked, no timezone).
     eatenTime: text("eaten_time"),
     nutritionSnapshotJson: jsonb("nutrition_snapshot_json")
-      .$type<NutritionSnapshot & { label: string; serving?: string }>()
+      .$type<NutritionSnapshot & { label: string; serving?: string; brand?: string }>()
       .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
