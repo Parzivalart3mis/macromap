@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { ListSkeleton } from "@/components/async-states";
 import { MealFoodPicker } from "@/components/diary/meal-food-picker";
+import { SwipeableRow } from "@/components/diary/swipeable-row";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { MacroRing, macroPctOfCalories } from "@/components/nutrition/macro-ring";
 import { NutritionPanel } from "@/components/nutrition/nutrition-panel";
@@ -112,6 +113,10 @@ function CreateMealView() {
         return quantity <= 0 ? [] : [{ ...item, quantity }];
       }),
     );
+  }
+
+  function removeItem(foodId: string) {
+    setItems((prev) => prev.filter((item) => item.food.id !== foodId));
   }
 
   async function save() {
@@ -261,44 +266,43 @@ function CreateMealView() {
           ) : (
             <div className="space-y-2">
               {items.map((item) => (
-                <div
-                  key={item.food.id}
-                  className="flex items-center gap-2 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-[15px] font-semibold">
-                        {item.food.name}
+                <SwipeableRow key={item.food.id} onDelete={() => removeItem(item.food.id)}>
+                  <div className="flex items-center gap-2 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]">
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate text-[15px] font-semibold">
+                          {item.food.name}
+                        </span>
+                        {item.food.isVerified ? <VerifiedBadge /> : null}
                       </span>
-                      {item.food.isVerified ? <VerifiedBadge /> : null}
+                      <span className="text-[13px] text-muted-foreground">
+                        {Math.round(item.food.calories * item.quantity)} cal ·{" "}
+                        {item.food.servingSizeValue * item.quantity} {item.food.servingSizeUnit}
+                      </span>
                     </span>
-                    <span className="text-[13px] text-muted-foreground">
-                      {Math.round(item.food.calories * item.quantity)} cal ·{" "}
-                      {item.food.servingSizeValue * item.quantity} {item.food.servingSizeUnit}
+                    <span className="stepper-controls flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="icon-xs"
+                        aria-label={`Less ${item.food.name}`}
+                        onClick={() => adjust(item.food.id, -0.25)}
+                      >
+                        <Minus aria-hidden />
+                      </Button>
+                      <span className="w-9 text-center text-sm tabular-nums">
+                        {item.quantity}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon-xs"
+                        aria-label={`More ${item.food.name}`}
+                        onClick={() => adjust(item.food.id, 0.25)}
+                      >
+                        <Plus aria-hidden />
+                      </Button>
                     </span>
-                  </span>
-                  <span className="stepper-controls flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon-xs"
-                      aria-label={`Less ${item.food.name}`}
-                      onClick={() => adjust(item.food.id, -0.25)}
-                    >
-                      <Minus aria-hidden />
-                    </Button>
-                    <span className="w-9 text-center text-sm tabular-nums">
-                      {item.quantity}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="icon-xs"
-                      aria-label={`More ${item.food.name}`}
-                      onClick={() => adjust(item.food.id, 0.25)}
-                    >
-                      <Plus aria-hidden />
-                    </Button>
-                  </span>
-                </div>
+                  </div>
+                </SwipeableRow>
               ))}
               <button
                 type="button"
