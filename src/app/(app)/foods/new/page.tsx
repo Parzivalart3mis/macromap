@@ -259,7 +259,7 @@ function CreateFoodWizard() {
               value={perContainer}
               onFocus={(e) => e.currentTarget.select()}
               onChange={(e) => setPerContainer(decimalOnly(e.target.value))}
-              className={NUM_INPUT}
+              className={ROW_INPUT}
             />
           </FieldRow>
         </div>
