@@ -94,16 +94,27 @@ function DiaryHome() {
     fetchDay(addDaysISO(date, -1));
   }, [date, fetchDay]);
 
-  // Streak once; on window focus, refresh streak and the active day (data may
-  // have changed on the log/edit pages).
+  // Streak once; whenever the diary becomes visible again (returning from the
+  // log/add pages, or foregrounding the PWA), refresh the streak and active day.
+  // iOS standalone PWAs fire `visibilitychange`/`pageshow` reliably but often
+  // not `focus`, so we listen to all three.
   useEffect(() => {
     loadStreak();
-    const onFocus = () => {
+    const refresh = () => {
       loadStreak();
       fetchDay(dateRef.current, true);
     };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchDay, loadStreak]);
 
   const goTo = useCallback(
@@ -174,31 +185,25 @@ function DiaryHome() {
             <Button variant="ghost" size="icon-sm" aria-label="Previous day" onClick={goPrev}>
               <ChevronLeft aria-hidden />
             </Button>
-            <button
-              type="button"
-              className="flex items-center gap-1 rounded-xl text-xl font-extrabold tracking-tight"
-              onClick={() => {
-                dateInputRef.current?.showPicker?.();
-                dateInputRef.current?.click();
-              }}
-            >
+            {/* A transparent native date input overlays the label, so tapping
+                reliably opens the OS calendar (showPicker() is flaky on iOS). */}
+            <span className="relative flex items-center gap-1 rounded-xl text-xl font-extrabold tracking-tight">
               {formatDisplayDate(date)}
               <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
-            </button>
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={date}
+                onChange={(event) => {
+                  if (DATE_RE.test(event.target.value)) goTo(event.target.value);
+                }}
+                aria-label="Pick a date"
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+            </span>
             <Button variant="ghost" size="icon-sm" aria-label="Next day" onClick={goNext}>
               <ChevronRight aria-hidden />
             </Button>
-            <input
-              ref={dateInputRef}
-              type="date"
-              value={date}
-              onChange={(event) => {
-                if (DATE_RE.test(event.target.value)) goTo(event.target.value);
-              }}
-              className="sr-only"
-              aria-label="Pick a date"
-              tabIndex={-1}
-            />
           </div>
           {streak ? (
             <span

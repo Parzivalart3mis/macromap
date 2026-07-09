@@ -116,7 +116,8 @@ export function MealFoodPicker({
   const [externalResults, setExternalResults] = useState<ExternalFoodResultDTO[]>([]);
   const [importingIndex, setImportingIndex] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Typing filters the tabs; the combined DB/web search runs only on submit.
+  const [submitted, setSubmitted] = useState(false);
 
   // Tabs data (My Foods = created non-recipes, My Recipes = created recipes)
   const [recent, setRecent] = useState<{ food: FoodDTO; lastQuantity: number }[] | null>(null);
@@ -191,15 +192,21 @@ export function MealFoodPicker({
     }
   }
 
+  // Typing only filters the tabs.
   function runSearch(value: string) {
     setQuery(value);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
+    setSubmitted(false);
     if (value.trim().length < 2) {
       setResults([]);
       setExternalResults([]);
-      return;
     }
-    searchTimer.current = setTimeout(() => fetchResults(value), 250);
+  }
+
+  // Keyboard search key / magnifier runs the combined DB+web search.
+  function submitSearch() {
+    if (query.trim().length < 2) return;
+    setSubmitted(true);
+    fetchResults(query);
   }
 
   async function importExternal(
@@ -272,9 +279,15 @@ export function MealFoodPicker({
     }
   }
 
-  const recipes = myFoods?.filter((food) => food.isRecipe) ?? null;
-  const plainFoods = myFoods?.filter((food) => !food.isRecipe) ?? null;
-  const searchActive = query.trim().length >= 2;
+  // While typing (before submit), the tabs stay and filter locally by the query.
+  const q = query.trim().toLowerCase();
+  const filtering = q.length > 0 && !submitted;
+  const matchesQuery = (name: string) => !q || name.toLowerCase().includes(q);
+  const recentFiltered = recent?.filter((item) => matchesQuery(item.food.name)) ?? null;
+  const recipes =
+    myFoods?.filter((food) => food.isRecipe && matchesQuery(food.name)) ?? null;
+  const plainFoods =
+    myFoods?.filter((food) => !food.isRecipe && matchesQuery(food.name)) ?? null;
 
   const QUICK_ACTIONS = [
     {
@@ -444,19 +457,30 @@ export function MealFoodPicker({
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-24">
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
+        <form
+          className="relative"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitSearch();
+          }}
+        >
+          <button
+            type="submit"
+            aria-label="Search"
+            className="absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+          >
+            <Search className="size-4" aria-hidden />
+          </button>
           <Input
+            type="search"
+            enterKeyHint="search"
             placeholder="Search foods, brands, flavors..."
             value={query}
             onChange={(event) => runSearch(event.target.value)}
             autoComplete="off"
             className="h-12 rounded-full pl-10"
           />
-        </div>
+        </form>
 
         {review ? (
           <MealSuggestionsReview
@@ -470,7 +494,7 @@ export function MealFoodPicker({
             }}
             onCancel={() => setReview(null)}
           />
-        ) : searchActive ? (
+        ) : submitted ? (
           searching ? (
             <ListSkeleton rows={4} />
           ) : (
@@ -529,21 +553,31 @@ export function MealFoodPicker({
               <TabsTrigger value="foods">My Foods</TabsTrigger>
             </TabsList>
 
-            <div className="pt-3">{quickActionsRow}</div>
-            {modePanels}
+            {filtering ? null : (
+              <>
+                <div className="pt-3">{quickActionsRow}</div>
+                {modePanels}
+              </>
+            )}
 
             <TabsContent value="history" className="pt-3">
-              <p className="mb-2 px-1 text-lg font-extrabold tracking-tight">Recently logged</p>
-              {recent === null ? (
+              {!filtering ? (
+                <p className="mb-2 px-1 text-lg font-extrabold tracking-tight">Recently logged</p>
+              ) : null}
+              {recentFiltered === null ? (
                 <ListSkeleton rows={4} />
-              ) : recent.length === 0 ? (
+              ) : recentFiltered.length === 0 ? (
                 <EmptyState
-                  title="Nothing logged yet"
-                  body="Foods you log will show up here for quick adding."
+                  title={filtering ? "No matches in your history" : "Nothing logged yet"}
+                  body={
+                    filtering
+                      ? "Press the search key to look up the shared database."
+                      : "Foods you log will show up here for quick adding."
+                  }
                 />
               ) : (
                 <div className="stagger-children space-y-2">
-                  {recent.map(({ food, lastQuantity }) => (
+                  {recentFiltered.map(({ food, lastQuantity }) => (
                     <AddRow
                       key={food.id}
                       title={food.name}
@@ -562,7 +596,10 @@ export function MealFoodPicker({
               {recipes === null ? (
                 <ListSkeleton rows={3} />
               ) : recipes.length === 0 ? (
-                <EmptyState title="No recipes yet" body="Recipes you create appear here." />
+                <EmptyState
+                  title={filtering ? "No recipes match" : "No recipes yet"}
+                  body="Recipes you create appear here."
+                />
               ) : (
                 <div className="stagger-children space-y-2">
                   {recipes.map((food) => (
@@ -584,7 +621,10 @@ export function MealFoodPicker({
               {plainFoods === null ? (
                 <ListSkeleton rows={3} />
               ) : plainFoods.length === 0 ? (
-                <EmptyState title="No foods created yet" body="Foods you add appear here." />
+                <EmptyState
+                  title={filtering ? "No foods match" : "No foods created yet"}
+                  body="Foods you add appear here."
+                />
               ) : (
                 <div className="stagger-children space-y-2">
                   {plainFoods.map((food) => (

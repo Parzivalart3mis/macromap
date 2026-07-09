@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ListSkeleton } from "@/components/async-states";
@@ -277,7 +277,9 @@ function AddFoodView() {
   const [externalResults, setExternalResults] = useState<ExternalFoodResultDTO[]>([]);
   const [importingIndex, setImportingIndex] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Typing filters the tabs; the combined DB/web search runs only once the user
+  // submits (keyboard search key / magnifier). `submitted` gates that view.
+  const [submitted, setSubmitted] = useState(() => (searchParams.get("q") ?? "").trim().length >= 2);
 
   // Logging
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
@@ -351,7 +353,7 @@ function AddFoodView() {
     }
   }
 
-  // Re-run a query restored from the URL on mount.
+  // Re-run a query restored from the URL on mount (returning from a food page).
   useEffect(() => {
     const restored = searchParams.get("q") ?? "";
     if (restored.trim().length >= 2) {
@@ -360,16 +362,22 @@ function AddFoodView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Typing only filters the tabs; leaving the query returns to the tab view.
   function runSearch(value: string) {
     setQuery(value);
+    setSubmitted(false);
     syncUrl(value, mealName);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
     if (value.trim().length < 2) {
       setResults([]);
       setExternalResults([]);
-      return;
     }
-    searchTimer.current = setTimeout(() => fetchResults(value), 250);
+  }
+
+  // Pressing the keyboard search key / magnifier runs the combined DB+web search.
+  function submitSearch() {
+    if (query.trim().length < 2) return;
+    setSubmitted(true);
+    fetchResults(query);
   }
 
   // A store whose name matches the query gets a "browse the menu" card.
@@ -507,7 +515,14 @@ function AddFoodView() {
     },
   ];
 
-  const searchActive = query.trim().length >= 2;
+  // While typing (before submit), the tabs stay and filter locally by the query.
+  const q = query.trim().toLowerCase();
+  const filtering = q.length > 0 && !submitted;
+  const matchesQuery = (name: string) => !q || name.toLowerCase().includes(q);
+  const recentFiltered = recent?.filter((item) => matchesQuery(item.food.name)) ?? null;
+  const mealsFiltered = savedMeals?.filter((meal) => matchesQuery(meal.name)) ?? null;
+  const recipesFiltered = myFoods?.filter((food) => food.isRecipe && matchesQuery(food.name)) ?? null;
+  const foodsFiltered = myFoods?.filter((food) => !food.isRecipe && matchesQuery(food.name)) ?? null;
 
   const quickActionsRow = (
     <div className="grid grid-cols-4 gap-2">
@@ -696,19 +711,30 @@ function AddFoodView() {
       </header>
 
       <div className="space-y-4 p-4 pb-24">
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
+        <form
+          className="relative"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitSearch();
+          }}
+        >
+          <button
+            type="submit"
+            aria-label="Search"
+            className="absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+          >
+            <Search className="size-4" aria-hidden />
+          </button>
           <Input
+            type="search"
+            enterKeyHint="search"
             placeholder="Search foods, brands, flavors..."
             value={query}
             onChange={(event) => runSearch(event.target.value)}
             autoComplete="off"
             className="h-12 rounded-full pl-10"
           />
-        </div>
+        </form>
 
         {/* Natural-language review takes over when present */}
         {review ? (
@@ -732,7 +758,7 @@ function AddFoodView() {
           </>
         ) : (
           <>
-            {searchActive ? (
+            {submitted ? (
               searching ? (
                 <ListSkeleton rows={4} />
               ) : (
@@ -818,27 +844,38 @@ function AddFoodView() {
                 <TabsList className="w-full">
                   <TabsTrigger value="history">History</TabsTrigger>
                   <TabsTrigger value="meals">My Meals</TabsTrigger>
+                  <TabsTrigger value="recipes">My Recipes</TabsTrigger>
                   <TabsTrigger value="foods">My Foods</TabsTrigger>
                 </TabsList>
 
-                {/* Barcode / voice / describe / quick add — under the tabs */}
-                <div className="pt-3">{quickActionsRow}</div>
-                {modePanels}
+                {/* Barcode / voice / describe / quick add — hidden while filtering */}
+                {filtering ? null : (
+                  <>
+                    <div className="pt-3">{quickActionsRow}</div>
+                    {modePanels}
+                  </>
+                )}
 
                 <TabsContent value="history" className="pt-3">
-                  <p className="mb-2 px-1 text-lg font-extrabold tracking-tight">
-                    Recently logged
-                  </p>
-                  {recent === null ? (
+                  {!filtering ? (
+                    <p className="mb-2 px-1 text-lg font-extrabold tracking-tight">
+                      Recently logged
+                    </p>
+                  ) : null}
+                  {recentFiltered === null ? (
                     <ListSkeleton rows={4} />
-                  ) : recent.length === 0 ? (
+                  ) : recentFiltered.length === 0 ? (
                     <EmptyState
-                      title="Nothing logged yet"
-                      body="Foods you log will show up here for quick relogging."
+                      title={filtering ? "No matches in your history" : "Nothing logged yet"}
+                      body={
+                        filtering
+                          ? "Try the search key to look up the shared database."
+                          : "Foods you log will show up here for quick relogging."
+                      }
                     />
                   ) : (
                     <div className="stagger-children space-y-2">
-                      {recent.map(({ food, lastQuantity }) => (
+                      {recentFiltered.map(({ food, lastQuantity }) => (
                         <QuickRow
                           key={food.id}
                           title={food.name}
@@ -855,16 +892,16 @@ function AddFoodView() {
                 </TabsContent>
 
                 <TabsContent value="meals" className="pt-3">
-                  {savedMeals === null ? (
+                  {mealsFiltered === null ? (
                     <ListSkeleton rows={3} />
-                  ) : savedMeals.length === 0 ? (
+                  ) : mealsFiltered.length === 0 ? (
                     <EmptyState
-                      title="No saved meals yet"
+                      title={filtering ? "No meals match" : "No saved meals yet"}
                       body="Log a meal, then use its menu to save it as a template."
                     />
                   ) : (
                     <div className="stagger-children space-y-2">
-                      {savedMeals.map((savedMeal) => (
+                      {mealsFiltered.map((savedMeal) => (
                         <QuickRow
                           key={savedMeal.id}
                           title={savedMeal.name}
@@ -882,12 +919,39 @@ function AddFoodView() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="foods" className="pt-3">
-                  {myFoods === null ? (
+                <TabsContent value="recipes" className="pt-3">
+                  {recipesFiltered === null ? (
                     <ListSkeleton rows={3} />
-                  ) : myFoods.length === 0 ? (
+                  ) : recipesFiltered.length === 0 ? (
                     <EmptyState
-                      title="No foods created yet"
+                      title={filtering ? "No recipes match" : "No recipes yet"}
+                      body="Dishes you create with a per-serving size show up here."
+                    />
+                  ) : (
+                    <div className="stagger-children space-y-2">
+                      {recipesFiltered.map((food) => (
+                        <QuickRow
+                          key={food.id}
+                          title={food.name}
+                          subtitle={foodSubtitle(food)}
+                          description={food.description}
+                          verified={food.isVerified}
+                          busy={quickBusy === food.id}
+                          onOpen={() => openLog(food.id, "search")}
+                          onQuickLog={() => quickLog(food, 1)}
+                          editHref={`/foods/${food.id}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="foods" className="pt-3">
+                  {foodsFiltered === null ? (
+                    <ListSkeleton rows={3} />
+                  ) : foodsFiltered.length === 0 ? (
+                    <EmptyState
+                      title={filtering ? "No foods match" : "No foods created yet"}
                       body="Foods you add to the shared database appear here."
                       action={
                         <Button variant="outline" size="sm" asChild>
@@ -897,7 +961,7 @@ function AddFoodView() {
                     />
                   ) : (
                     <div className="stagger-children space-y-2">
-                      {myFoods.map((food) => (
+                      {foodsFiltered.map((food) => (
                         <QuickRow
                           key={food.id}
                           title={food.name}
