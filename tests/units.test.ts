@@ -110,10 +110,24 @@ describe("servingOptions", () => {
         alternateServings: [{ unit: "scoop", multiplier: 0.5 }],
       }),
     );
-    const scoop = opts.find((o) => o.label === "1 scoop");
+    // Labelled with the base equivalent in parentheses.
+    const scoop = opts.find((o) => o.unit === "scoop");
     expect(scoop).toBeDefined();
+    expect(scoop!.label).toBe("1 scoop (0.5 packets)");
     // Half a packet's worth of the base measure.
     expect(scoop!.baseAmount).toBeCloseTo(0.5);
+  });
+
+  it("labels a whole-multiple alternate serving with the base unit", () => {
+    const opts = servingOptions(
+      food({
+        servingSizeValue: 1,
+        servingSizeUnit: "serving",
+        alternateServings: [{ unit: "container", multiplier: 4 }],
+      }),
+    );
+    const container = opts.find((o) => o.unit === "container");
+    expect(container?.label).toBe("1 container (4 servings)");
   });
 });
 

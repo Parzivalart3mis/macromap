@@ -81,6 +81,12 @@ function classifyUnit(rawUnit: string): { kind: UnitKind; canonical: string; fac
   return { kind: "count", canonical: rawUnit, factor: 1 };
 }
 
+/** Pluralize count-based units (serving → servings); weights/volumes stay literal. */
+function pluralizeUnit(unit: string, count: number): string {
+  if (count === 1 || classifyUnit(unit).kind !== "count") return unit;
+  return unit.endsWith("s") ? unit : `${unit}s`;
+}
+
 /** Total base measure (ml / g) of one of the food's native servings. */
 export function baseServingAmount(food: FoodDTO): number {
   const { kind, factor } = classifyUnit(food.servingSizeUnit);
@@ -118,9 +124,16 @@ export function servingOptions(food: FoodDTO): UnitOption[] {
   push(food.servingSizeValue, food.servingSizeUnit, base);
 
   // User-defined extra serving sizes, each a multiple of the base serving.
-  // Added for every food kind (including count-based).
+  // Added for every food kind (including count-based). Labelled with the base
+  // equivalent, e.g. base "1 serving" + a 4× container → "1 container (4 servings)".
   for (const alt of food.alternateServings ?? []) {
-    add(1, alt.unit, alt.multiplier * base);
+    const baseAmount = alt.multiplier * base;
+    const dedupKey = Math.round(baseAmount * 1000) / 1000;
+    if (seen.has(dedupKey) || baseAmount <= 0) continue;
+    seen.add(dedupKey);
+    const equiv = alt.multiplier * food.servingSizeValue;
+    const label = `1 ${alt.unit} (${formatNum(equiv)} ${pluralizeUnit(food.servingSizeUnit, equiv)})`;
+    options.push({ label, value: 1, unit: alt.unit, baseAmount });
   }
 
   if (kind === "count") return options;

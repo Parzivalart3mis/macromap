@@ -1,13 +1,14 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "framer-motion";
-import { ChevronDown, ChevronLeft, ChevronRight, Flame, Plus } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Flame, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ErrorState } from "@/components/async-states";
+import { CalendarPopover } from "@/components/diary/calendar-popover";
 import { DiaryDayContent } from "@/components/diary/day-content";
 import { WeekStrip } from "@/components/diary/week-strip";
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,8 @@ function DiaryHome() {
   const [newMealName, setNewMealName] = useState("");
   const [insights, setInsights] = useState<string[] | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const dateInputRef = useRef<HTMLInputElement>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const dateBtnRef = useRef<HTMLButtonElement>(null);
   const loadingRef = useRef<Set<string>>(new Set());
   const dateRef = useRef(date);
   useEffect(() => {
@@ -185,22 +187,21 @@ function DiaryHome() {
             <Button variant="ghost" size="icon-sm" aria-label="Previous day" onClick={goPrev}>
               <ChevronLeft aria-hidden />
             </Button>
-            {/* A transparent native date input overlays the label, so tapping
-                reliably opens the OS calendar (showPicker() is flaky on iOS). */}
-            <span className="relative flex items-center gap-1 rounded-xl text-xl font-extrabold tracking-tight">
+            <button
+              ref={dateBtnRef}
+              type="button"
+              aria-label="Pick a date"
+              aria-expanded={calendarOpen}
+              className="flex items-center gap-1 rounded-xl text-xl font-extrabold tracking-tight"
+              onClick={() => setCalendarOpen((open) => !open)}
+            >
               {formatDisplayDate(date)}
-              <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
-              <input
-                ref={dateInputRef}
-                type="date"
-                value={date}
-                onChange={(event) => {
-                  if (DATE_RE.test(event.target.value)) goTo(event.target.value);
-                }}
-                aria-label="Pick a date"
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </span>
+              {calendarOpen ? (
+                <ChevronUp className="size-4 text-muted-foreground" aria-hidden />
+              ) : (
+                <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
+              )}
+            </button>
             <Button variant="ghost" size="icon-sm" aria-label="Next day" onClick={goNext}>
               <ChevronRight aria-hidden />
             </Button>
@@ -235,6 +236,20 @@ function DiaryHome() {
           onSelect={goTo}
         />
       </header>
+
+      {calendarOpen ? (
+        <CalendarPopover
+          selected={date}
+          today={todayISO()}
+          loggedDates={recentDates}
+          anchorRef={dateBtnRef}
+          onSelect={(next) => {
+            goTo(next);
+            setCalendarOpen(false);
+          }}
+          onClose={() => setCalendarOpen(false)}
+        />
+      ) : null}
 
       {error && !activePayload ? (
         <ErrorState message={error} onRetry={() => fetchDay(date, true)} />
