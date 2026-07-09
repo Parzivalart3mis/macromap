@@ -1,20 +1,14 @@
 "use client";
 
+import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import {
-  AlternateServingsEditor,
-  type ServingDraft,
-  servingsFromDrafts,
-} from "@/components/foods/alternate-servings-editor";
-import { PageHeader } from "@/components/shell/page-header";
+import { ListSkeleton } from "@/components/async-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -35,70 +29,126 @@ type CreateResponse =
   | { status: "duplicate_warning"; similarFoods: SimilarFood[] }
   | { status: "created"; foodId: string };
 
-const NUMBER_FIELDS = [
-  { key: "calories", label: "Calories (kcal)", required: true },
-  { key: "proteinG", label: "Protein (g)", required: true },
-  { key: "carbsG", label: "Total carbs (g)", required: true },
-  { key: "fatG", label: "Total fat (g)", required: true },
-  { key: "satFatG", label: "Saturated fat (g)", required: false },
-  { key: "polyUnsatFatG", label: "Polyunsat. fat (g)", required: false },
-  { key: "monoUnsatFatG", label: "Monounsat. fat (g)", required: false },
-  { key: "transFatG", label: "Trans fat (g)", required: false },
-  { key: "cholesterolMg", label: "Cholesterol (mg)", required: false },
-  { key: "sodiumMg", label: "Sodium (mg)", required: false },
-  { key: "potassiumMg", label: "Potassium (mg)", required: false },
-  { key: "fiberG", label: "Dietary fiber (g)", required: false },
-  { key: "sugarG", label: "Sugars (g)", required: false },
-  { key: "addedSugarsG", label: "Added sugars (g)", required: false },
-  { key: "sugarAlcoholsG", label: "Sugar alcohols (g)", required: false },
-  { key: "vitaminAPct", label: "Vitamin A (% DV)", required: false },
-  { key: "vitaminCPct", label: "Vitamin C (% DV)", required: false },
-  { key: "calciumPct", label: "Calcium (% DV)", required: false },
-  { key: "ironPct", label: "Iron (% DV)", required: false },
-  { key: "vitaminDPct", label: "Vitamin D (% DV)", required: false },
+// Nutrition step, in the order the label reads. Only Calories is user-required;
+// protein/carbs/fat are optional in the UI but sent as 0 (the API needs them).
+const NUTRITION_FIELDS = [
+  { key: "calories", label: "Calories", required: true },
+  { key: "fatG", label: "Total Fat (g)" },
+  { key: "satFatG", label: "Saturated Fat (g)" },
+  { key: "polyUnsatFatG", label: "Polyunsaturated Fat (g)" },
+  { key: "monoUnsatFatG", label: "Monounsaturated (g)" },
+  { key: "transFatG", label: "Trans Fat (g)" },
+  { key: "cholesterolMg", label: "Cholesterol (mg)" },
+  { key: "sodiumMg", label: "Sodium (mg)" },
+  { key: "potassiumMg", label: "Potassium (mg)" },
+  { key: "carbsG", label: "Total Carbohydrates (g)" },
+  { key: "fiberG", label: "Dietary Fiber (g)" },
+  { key: "sugarG", label: "Sugars (g)" },
+  { key: "addedSugarsG", label: "Added Sugars (g)" },
+  { key: "sugarAlcoholsG", label: "Sugar Alcohols (g)" },
+  { key: "proteinG", label: "Protein (g)" },
+  { key: "vitaminAPct", label: "Vitamin A (% DV)" },
+  { key: "vitaminCPct", label: "Vitamin C (% DV)" },
+  { key: "calciumPct", label: "Calcium (% DV)" },
+  { key: "ironPct", label: "Iron (% DV)" },
+  { key: "vitaminDPct", label: "Vitamin D (% DV)" },
 ] as const;
+const API_DEFAULT_ZERO = new Set(["calories", "proteinG", "carbsG", "fatG"]);
 
-function NewFoodForm() {
+const ROW_INPUT =
+  "h-8 flex-1 min-w-0 border-0 bg-transparent p-0 text-right shadow-none focus-visible:ring-0";
+const NUM_INPUT =
+  "h-8 w-28 shrink-0 border-0 bg-transparent p-0 text-right shadow-none focus-visible:ring-0";
+
+/** Parse "1 cup" / "0.5 cup" / "1/2 cup" / "100g" into { value, unit }. */
+function parseServing(input: string): { value: number; unit: string } {
+  const s = input.trim();
+  const match = s.match(/^([\d.]+\/[\d.]+|[\d.]+)\s*(.*)$/);
+  if (!match) return { value: 1, unit: s || "serving" };
+  let value = 1;
+  if (match[1].includes("/")) {
+    const [a, b] = match[1].split("/").map(Number);
+    value = b ? a / b : 1;
+  } else {
+    value = Number(match[1]) || 1;
+  }
+  return { value: value > 0 ? value : 1, unit: match[2].trim() || "serving" };
+}
+
+/** Keep only digits and a single decimal point. */
+function decimalOnly(raw: string): string {
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  const parts = cleaned.split(".");
+  return parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : cleaned;
+}
+
+function CreateFoodWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [name, setName] = useState("");
+  const barcode = searchParams.get("barcode") ?? "";
+
+  const [step, setStep] = useState<1 | 2>(1);
   const [brandName, setBrandName] = useState("");
+  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [servingValue, setServingValue] = useState("1");
-  const [servingUnit, setServingUnit] = useState("serving");
-  const [barcode, setBarcode] = useState(searchParams.get("barcode") ?? "");
-  const [altServings, setAltServings] = useState<ServingDraft[]>([]);
+  const [servingSize, setServingSize] = useState("");
+  const [perContainer, setPerContainer] = useState("1");
   const [numbers, setNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [duplicates, setDuplicates] = useState<SimilarFood[] | null>(null);
 
+  // Back trap: advancing to step 2 pushes a history entry, so the back gesture /
+  // button returns to step 1 instead of leaving the wizard.
+  useEffect(() => {
+    const onPop = () => setStep(1);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  function goNext() {
+    if (!name.trim()) {
+      toast.error("Food name is required");
+      return;
+    }
+    if (!servingSize.trim() || !(parseServing(servingSize).value > 0)) {
+      toast.error("Enter a serving size, e.g. 1 cup");
+      return;
+    }
+    if (!(Number(perContainer) > 0)) {
+      toast.error("Servings per container must be at least 1");
+      return;
+    }
+    window.history.pushState({ foodWizard: 2 }, "");
+    setStep(2);
+  }
+
   function buildPayload(forceCreate: boolean) {
+    const { value, unit } = parseServing(servingSize);
     const payload: Record<string, unknown> = {
       name: name.trim(),
-      servingSizeValue: Number(servingValue),
-      servingSizeUnit: servingUnit.trim(),
+      servingSizeValue: value,
+      servingSizeUnit: unit,
       forceCreate,
     };
     if (brandName.trim()) payload.brandName = brandName.trim();
     if (description.trim()) payload.description = description.trim();
     if (barcode.trim()) payload.barcode = barcode.trim();
-    const alternateServings = servingsFromDrafts(altServings);
-    if (alternateServings.length > 0) payload.alternateServings = alternateServings;
-    for (const field of NUMBER_FIELDS) {
+    // Servings per container → a "container" alternate serving (MFP-style).
+    const perN = Number(perContainer);
+    if (Number.isFinite(perN) && perN > 1) {
+      payload.alternateServings = [{ unit: "container", multiplier: perN }];
+    }
+    for (const field of NUTRITION_FIELDS) {
       const raw = numbers[field.key];
       if (raw != null && raw !== "") payload[field.key] = Number(raw);
-      else if (field.required) payload[field.key] = 0;
+      else if (API_DEFAULT_ZERO.has(field.key)) payload[field.key] = 0;
     }
     return payload;
   }
 
   async function submit(forceCreate: boolean) {
-    if (!name.trim()) {
-      toast.error("Name is required");
-      return;
-    }
-    if (!(Number(servingValue) > 0)) {
-      toast.error("Serving size must be positive");
+    if (numbers.calories == null || numbers.calories === "") {
+      toast.error("Calories are required");
       return;
     }
     setBusy(true);
@@ -111,7 +161,6 @@ function NewFoodForm() {
         setDuplicates(result.similarFoods);
       } else {
         toast.success("Food added to the shared database");
-        // Replace so back from the food page skips this completed form.
         router.replace(`/foods/${result.foodId}`);
       }
     } catch (error) {
@@ -122,109 +171,129 @@ function NewFoodForm() {
   }
 
   return (
-    <>
-      <div className="space-y-4 p-4">
-        <div className="space-y-1">
-          <Label htmlFor="food-name">Name</Label>
-          <Input
-            id="food-name"
-            value={name}
-            maxLength={200}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Greek yogurt, plain"
-          />
+    <main className="pb-10">
+      <header className="top-header app-chrome glass sticky top-0 z-30 border-b border-border/60 px-4 pb-3">
+        <div className="flex items-center justify-between gap-2 pt-2">
+          {step === 1 ? (
+            <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={() => router.back()}>
+              <X aria-hidden />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Back"
+              onClick={() => window.history.back()}
+            >
+              <ArrowLeft aria-hidden />
+            </Button>
+          )}
+          <h1 className="text-lg font-bold">Create Food</h1>
+          {step === 1 ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Next"
+              className="text-primary"
+              onClick={goNext}
+            >
+              <ArrowRight aria-hidden />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Save food"
+              className="text-primary"
+              disabled={busy}
+              onClick={() => submit(false)}
+            >
+              <Check aria-hidden />
+            </Button>
+          )}
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="food-brand">Brand (optional)</Label>
-          <Input
-            id="food-brand"
-            value={brandName}
-            maxLength={100}
-            onChange={(event) => setBrandName(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="food-description">Description (optional)</Label>
-          <Textarea
-            id="food-description"
-            value={description}
-            maxLength={500}
-            rows={2}
-            placeholder="Notes about this dish — recipe source, how you make it..."
-            onChange={(event) => setDescription(event.target.value)}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="serving-value">Serving size</Label>
+      </header>
+
+      {step === 1 ? (
+        <div className="divide-y border-b text-sm">
+          <FieldRow label="Brand Name" hint="Optional">
             <Input
-              id="serving-value"
-              type="number"
+              value={brandName}
+              maxLength={100}
+              placeholder="ex. Campbell's"
+              onChange={(e) => setBrandName(e.target.value)}
+              className={ROW_INPUT}
+            />
+          </FieldRow>
+          <FieldRow label="Food Name" hint="Required">
+            <Input
+              value={name}
+              maxLength={200}
+              placeholder="ex. Chicken Soup"
+              onChange={(e) => setName(e.target.value)}
+              className={ROW_INPUT}
+            />
+          </FieldRow>
+          <FieldRow label="Description" hint="Optional">
+            <Input
+              value={description}
+              maxLength={500}
+              placeholder="ex. Homemade, less oil"
+              onChange={(e) => setDescription(e.target.value)}
+              className={ROW_INPUT}
+            />
+          </FieldRow>
+          <FieldRow label="Serving Size" hint="Required">
+            <Input
+              value={servingSize}
+              maxLength={30}
+              placeholder="ex. 1 cup"
+              onChange={(e) => setServingSize(e.target.value)}
+              className={ROW_INPUT}
+            />
+          </FieldRow>
+          <FieldRow label="Servings per container" hint="Required">
+            <Input
+              type="text"
               inputMode="decimal"
-              min={0}
-              step="any"
-              value={servingValue}
-              onChange={(event) => setServingValue(event.target.value)}
+              value={perContainer}
+              onFocus={(e) => e.currentTarget.select()}
+              onChange={(e) => setPerContainer(decimalOnly(e.target.value))}
+              className={NUM_INPUT}
             />
+          </FieldRow>
+        </div>
+      ) : (
+        <>
+          <p className="px-4 pt-4 pb-1 text-sm font-semibold text-muted-foreground">
+            Nutrition Facts
+          </p>
+          <div className="divide-y border-y text-sm">
+            {NUTRITION_FIELDS.map((field) => (
+              <div key={field.key} className="flex items-center justify-between gap-3 px-4 py-3">
+                <label htmlFor={`nf-${field.key}`} className="font-medium">
+                  {field.label}
+                </label>
+                <Input
+                  id={`nf-${field.key}`}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={"required" in field ? "Required" : "Optional"}
+                  value={numbers[field.key] ?? ""}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onChange={(e) =>
+                    setNumbers((prev) => ({ ...prev, [field.key]: decimalOnly(e.target.value) }))
+                  }
+                  className={NUM_INPUT}
+                />
+              </div>
+            ))}
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="serving-unit">Unit</Label>
-            <Input
-              id="serving-unit"
-              value={servingUnit}
-              maxLength={20}
-              onChange={(event) => setServingUnit(event.target.value)}
-              placeholder="g, ml, serving"
-            />
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="food-barcode">Barcode (optional)</Label>
-          <Input
-            id="food-barcode"
-            inputMode="numeric"
-            value={barcode}
-            onChange={(event) => setBarcode(event.target.value.replace(/\D/g, ""))}
-          />
-        </div>
-
-        <AlternateServingsEditor
-          drafts={altServings}
-          onChange={setAltServings}
-          baseValue={Number(servingValue)}
-          baseUnit={servingUnit}
-        />
-
-        <h2 className="pt-2 text-sm font-semibold">Nutrition per serving</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {NUMBER_FIELDS.map((field) => (
-            <div key={field.key} className="space-y-1">
-              <Label htmlFor={`nf-${field.key}`}>
-                {field.label}
-                {field.required ? "" : " (opt.)"}
-              </Label>
-              <Input
-                id={`nf-${field.key}`}
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                value={numbers[field.key] ?? ""}
-                onChange={(event) =>
-                  setNumbers((prev) => ({ ...prev, [field.key]: event.target.value }))
-                }
-              />
-            </div>
-          ))}
-        </div>
-
-        <Button className="w-full" size="lg" disabled={busy} onClick={() => submit(false)}>
-          {busy ? "Checking..." : "Add to shared database"}
-        </Button>
-        <p className="text-center text-xs text-muted-foreground">
-          Shared foods are visible to all users, edits are tracked in history
-        </p>
-      </div>
+          <p className="px-4 pt-3 text-center text-xs text-muted-foreground">
+            Shared foods are visible to all users; edits are tracked in history.
+          </p>
+        </>
+      )}
 
       <Sheet
         open={duplicates !== null}
@@ -235,9 +304,7 @@ function NewFoodForm() {
         <SheetContent side="bottom" className="sheet-safe-bottom rounded-t-2xl">
           <SheetHeader>
             <SheetTitle>Similar foods already exist</SheetTitle>
-            <SheetDescription>
-              Using an existing entry keeps the shared database clean
-            </SheetDescription>
+            <SheetDescription>Using an existing entry keeps the shared database clean</SheetDescription>
           </SheetHeader>
           <div className="space-y-3 px-4 pb-6">
             <ul className="divide-y rounded-xl border">
@@ -261,11 +328,7 @@ function NewFoodForm() {
               ))}
             </ul>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setDuplicates(null)}
-              >
+              <Button variant="outline" className="flex-1" onClick={() => setDuplicates(null)}>
                 Go back
               </Button>
               <Button className="flex-1" disabled={busy} onClick={() => submit(true)}>
@@ -275,17 +338,34 @@ function NewFoodForm() {
           </div>
         </SheetContent>
       </Sheet>
-    </>
+    </main>
+  );
+}
+
+function FieldRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <span className="shrink-0">
+        <span className="block font-medium">{label}</span>
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </span>
+      {children}
+    </div>
   );
 }
 
 export default function NewFoodPage() {
   return (
-    <main>
-      <PageHeader title="New food" />
-      <Suspense>
-        <NewFoodForm />
-      </Suspense>
-    </main>
+    <Suspense fallback={<ListSkeleton rows={5} />}>
+      <CreateFoodWizard />
+    </Suspense>
   );
 }
