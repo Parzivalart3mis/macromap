@@ -202,6 +202,7 @@ export function EntryEditDialog({
               inputMode="decimal"
               autoComplete="off"
               value={servings}
+              onFocus={(event) => event.currentTarget.select()}
               onChange={(event) => {
                 const raw = event.target.value.replace(/[^0-9.]/g, "");
                 const parts = raw.split(".");
