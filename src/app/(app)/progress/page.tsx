@@ -255,7 +255,7 @@ export default function ProgressPage() {
             </CardHeader>
             <CardContent>
               <CalorieHistoryChart data={overview.calorieHistory} />
-              <p className="mt-1 text-center text-[11px] text-muted-foreground">
+              <p className="mt-1 text-center text-[10px] text-muted-foreground">
                 Bars show calories eaten, dashed line is your goal
               </p>
             </CardContent>

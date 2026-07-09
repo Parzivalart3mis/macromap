@@ -39,12 +39,12 @@ function LibraryRow({
       className="flex w-full items-center gap-3 border-b px-1 py-3 text-left hover:bg-muted/40"
     >
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-semibold">{title}</span>
-        <span className="block truncate text-[13px] text-muted-foreground">
+        <span className="block truncate text-[14px] font-semibold">{title}</span>
+        <span className="block truncate text-[12px] text-muted-foreground">
           {subtitle}
         </span>
         {description ? (
-          <span className="block truncate text-[13px] text-muted-foreground/80 italic">
+          <span className="block truncate text-[12px] text-muted-foreground/80 italic">
             {description}
           </span>
         ) : null}

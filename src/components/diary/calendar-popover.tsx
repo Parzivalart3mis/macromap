@@ -113,7 +113,7 @@ export function CalendarPopover({
           {WEEKDAYS.map((w) => (
             <span
               key={w}
-              className="pb-1 text-center text-[10px] font-semibold tracking-wide text-muted-foreground uppercase"
+              className="pb-1 text-center text-[9px] font-semibold tracking-wide text-muted-foreground uppercase"
             >
               {w}
             </span>

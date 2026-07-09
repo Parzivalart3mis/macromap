@@ -81,7 +81,7 @@ export function WeekStrip({
             ) : null}
             <span
               className={cn(
-                "relative text-[11px] font-semibold",
+                "relative text-[10px] font-semibold",
                 isSelected ? "text-primary" : "text-muted-foreground",
               )}
             >

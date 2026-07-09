@@ -101,14 +101,14 @@ function QuickRow({
         className="min-w-0 flex-1 text-left"
       >
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-[15px] font-semibold">{title}</span>
+          <span className="truncate text-[14px] font-semibold">{title}</span>
           {verified ? <VerifiedBadge /> : null}
         </span>
-        <span className="block truncate text-[13px] text-muted-foreground">
+        <span className="block truncate text-[12px] text-muted-foreground">
           {subtitle}
         </span>
         {description ? (
-          <span className="block truncate text-[13px] text-muted-foreground/80 italic">
+          <span className="block truncate text-[12px] text-muted-foreground/80 italic">
             {description}
           </span>
         ) : null}
@@ -778,10 +778,10 @@ function AddFoodView() {
                         <MapPin className="size-5" aria-hidden />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[15px] font-semibold">
+                        <span className="block text-[14px] font-semibold">
                           {matchedStore.name} Menu
                         </span>
-                        <span className="text-[13px] text-muted-foreground">
+                        <span className="text-[12px] text-muted-foreground">
                           Choose from {matchedStore.menuItemCount ?? 0} menu items
                         </span>
                       </span>

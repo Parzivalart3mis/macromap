@@ -73,12 +73,12 @@ function AddRow({
     <div className="card-lift flex items-center gap-2 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]">
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-[15px] font-semibold">{title}</span>
+          <span className="truncate text-[14px] font-semibold">{title}</span>
           {verified ? <VerifiedBadge /> : null}
         </span>
-        <span className="block truncate text-[13px] text-muted-foreground">{subtitle}</span>
+        <span className="block truncate text-[12px] text-muted-foreground">{subtitle}</span>
         {description ? (
-          <span className="block truncate text-[13px] text-muted-foreground/80 italic">
+          <span className="block truncate text-[12px] text-muted-foreground/80 italic">
             {description}
           </span>
         ) : null}

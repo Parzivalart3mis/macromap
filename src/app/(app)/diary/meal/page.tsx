@@ -368,10 +368,10 @@ function MealDetail() {
                       className="diary-row flex w-full items-center gap-3 rounded-2xl border bg-card p-4 text-left shadow-[var(--shadow-soft)]"
                     >
                       <span className="diary-entry-text min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-semibold">
+                        <span className="block truncate text-[14px] font-semibold">
                           {entry.nutritionSnapshotJson.label}
                         </span>
-                        <span className="text-[13px] text-muted-foreground">
+                        <span className="text-[12px] text-muted-foreground">
                           {entry.eatenTime ? `${formatClock(entry.eatenTime)} · ` : ""}
                           {entry.nutritionSnapshotJson.serving ??
                             (entry.quantity !== 1

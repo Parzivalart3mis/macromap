@@ -137,7 +137,7 @@ export default function FastingPage() {
                       >
                         {formatElapsed(now - new Date(active.startAt).getTime())}
                       </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                      <p className="mt-1 text-[10px] text-muted-foreground">
                         since{" "}
                         {new Date(active.startAt).toLocaleTimeString(undefined, {
                           hour: "2-digit",

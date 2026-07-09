@@ -283,7 +283,7 @@ function AddMealView() {
           <div className="divide-y rounded-2xl border bg-card">
             {meal.entriesSnapshotJson.map((line, index) => (
               <div key={index} className="flex items-center justify-between gap-3 px-4 py-3">
-                <span className="min-w-0 truncate text-[15px] font-medium">{line.label}</span>
+                <span className="min-w-0 truncate text-[14px] font-medium">{line.label}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
                   {Math.round(line.nutrition.calories * (valid ? servingNum : 1))} cal
                 </span>

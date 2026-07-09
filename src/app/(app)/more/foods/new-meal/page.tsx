@@ -270,12 +270,12 @@ function CreateMealView() {
                   <div className="flex items-center gap-2 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]">
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
-                        <span className="truncate text-[15px] font-semibold">
+                        <span className="truncate text-[14px] font-semibold">
                           {item.food.name}
                         </span>
                         {item.food.isVerified ? <VerifiedBadge /> : null}
                       </span>
-                      <span className="text-[13px] text-muted-foreground">
+                      <span className="text-[12px] text-muted-foreground">
                         {Math.round(item.food.calories * item.quantity)} cal ·{" "}
                         {item.food.servingSizeValue * item.quantity} {item.food.servingSizeUnit}
                       </span>
