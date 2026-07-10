@@ -132,7 +132,9 @@ export function servingOptions(food: FoodDTO): UnitOption[] {
     if (seen.has(dedupKey) || baseAmount <= 0) continue;
     seen.add(dedupKey);
     const equiv = alt.multiplier * food.servingSizeValue;
-    const label = `1 ${alt.unit} (${formatNum(equiv)} ${pluralizeUnit(food.servingSizeUnit, equiv)})`;
+    const label =
+      alt.label ??
+      `1 ${alt.unit} (${formatNum(equiv)} ${pluralizeUnit(food.servingSizeUnit, equiv)})`;
     options.push({ label, value: 1, unit: alt.unit, baseAmount });
   }
 

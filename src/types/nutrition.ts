@@ -55,6 +55,13 @@ export type NutritionKey = (typeof NUTRITION_KEYS)[number];
 export interface AlternateServing {
   unit: string;
   multiplier: number;
+  /**
+   * Optional explicit label for the serving picker. When set, it is shown
+   * verbatim instead of the auto-generated "1 <unit> (<n> <base>)" form — used
+   * for fixed sizes like beverage bottles ("16.9 fl oz") where the base
+   * equivalent ("1.41 cans") would be noise.
+   */
+  label?: string;
 }
 
 /** One line of a reusable saved-meal template. */
