@@ -314,18 +314,36 @@ function AddFoodView() {
   const [stores, setStores] = useState<StoreDTO[]>([]);
 
   useEffect(() => {
-    apiFetch<{ recent: RecentItem[] }>("/api/diary/recent")
-      .then((data) => setRecent(data.recent))
-      .catch(() => setRecent([]));
-    apiFetch<{ savedMeals: SavedMealDTO[] }>("/api/saved-meals")
-      .then((data) => setSavedMeals(data.savedMeals))
-      .catch(() => setSavedMeals([]));
-    apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine")
-      .then((data) => setMyFoods(data.foods))
-      .catch(() => setMyFoods([]));
+    // History/My Meals/My Foods refresh on mount and whenever this screen
+    // becomes visible again (e.g. returning here after logging a food), so a
+    // just-logged item shows up in "Recently logged".
+    function loadLibrary() {
+      apiFetch<{ recent: RecentItem[] }>("/api/diary/recent")
+        .then((data) => setRecent(data.recent))
+        .catch(() => setRecent([]));
+      apiFetch<{ savedMeals: SavedMealDTO[] }>("/api/saved-meals")
+        .then((data) => setSavedMeals(data.savedMeals))
+        .catch(() => setSavedMeals([]));
+      apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine")
+        .then((data) => setMyFoods(data.foods))
+        .catch(() => setMyFoods([]));
+    }
+    loadLibrary();
     apiFetch<{ stores: StoreDTO[] }>("/api/stores")
       .then((data) => setStores(data.stores))
       .catch(() => undefined);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadLibrary();
+    };
+    window.addEventListener("focus", loadLibrary);
+    window.addEventListener("pageshow", loadLibrary);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", loadLibrary);
+      window.removeEventListener("pageshow", loadLibrary);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   // Keep search + meal in the URL so back-navigation restores this exact view.

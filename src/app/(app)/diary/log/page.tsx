@@ -140,8 +140,9 @@ function LogFoodView() {
         }),
       });
       toast.success(`Logged to ${mealName}`);
-      // Replace so back from the diary skips this completed form.
-      router.replace(date === todayISO() ? "/diary" : `/diary?date=${date}`);
+      // Return to the screen that opened this (the meal's Add Food search, or a
+      // store menu) so the user can keep logging more.
+      router.back();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Logging failed");
       setBusy(false);
