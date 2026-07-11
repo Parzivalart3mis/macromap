@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ScanText, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ListSkeleton } from "@/components/async-states";
@@ -82,6 +82,29 @@ function decimalOnly(raw: string): string {
   return parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : cleaned;
 }
 
+/** Downscale a label photo to ≤1280 px JPEG and return bare base64. */
+async function imageToBase64(file: File): Promise<{ data: string; mimeType: string }> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  return { data: dataUrl.slice(dataUrl.indexOf(",") + 1), mimeType: "image/jpeg" };
+}
+
+/** Fields the scanner can prefill (label-printed values as strings). */
+interface ScannedLabel {
+  brandName?: string | null;
+  foodName?: string | null;
+  servingSize?: string | null;
+  servingsPerContainer?: number | null;
+  barcode?: string | null;
+  [nutrient: string]: string | number | null | undefined;
+}
+
 function CreateFoodWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -96,6 +119,34 @@ function CreateFoodWizard() {
   const [numbers, setNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [duplicates, setDuplicates] = useState<SimilarFood[] | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const scanInputRef = useRef<HTMLInputElement>(null);
+
+  async function scanLabel(file: File) {
+    setScanning(true);
+    try {
+      const { data, mimeType } = await imageToBase64(file);
+      const { label } = await apiFetch<{ label: ScannedLabel }>("/api/foods/label-scan", {
+        method: "POST",
+        body: JSON.stringify({ image: data, mimeType }),
+      });
+      if (label.brandName) setBrandName(label.brandName);
+      if (label.foodName) setName(label.foodName);
+      if (label.servingSize) setServingSize(label.servingSize);
+      if (label.servingsPerContainer) setPerContainer(String(label.servingsPerContainer));
+      const scanned: Record<string, string> = {};
+      for (const field of NUTRITION_FIELDS) {
+        const value = label[field.key];
+        if (typeof value === "number") scanned[field.key] = String(value);
+      }
+      setNumbers((prev) => ({ ...prev, ...scanned }));
+      toast.success("Label scanned — check the values before saving");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not read that label");
+    } finally {
+      setScanning(false);
+    }
+  }
 
   // Back trap: advancing to step 2 pushes a history entry, so the back gesture /
   // button returns to step 1 instead of leaving the wizard.
@@ -216,6 +267,29 @@ function CreateFoodWizard() {
 
       {step === 1 ? (
         <div className="divide-y border-b text-sm">
+          {/* Photo of the Nutrition Facts label prefills both steps */}
+          <div className="px-4 py-3">
+            <input
+              ref={scanInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) scanLabel(file);
+              }}
+            />
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={scanning}
+              onClick={() => scanInputRef.current?.click()}
+            >
+              <ScanText data-icon="inline-start" aria-hidden />
+              {scanning ? "Reading label..." : "Scan a nutrition label"}
+            </Button>
+          </div>
           <FieldRow label="Brand Name" hint="Optional">
             <Input
               value={brandName}
