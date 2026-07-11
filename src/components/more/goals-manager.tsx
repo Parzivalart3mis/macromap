@@ -35,6 +35,17 @@ const MACRO_COLUMNS = [
 
 type DayValues = Record<(typeof MACRO_COLUMNS)[number]["key"], string>;
 
+// Optional micro targets, one value applied to every day of the week (blank =
+// no target; the diary simply shows no bar for it).
+const MICRO_FIELDS = [
+  { key: "fiberG", label: "Fiber (g, minimum)" },
+  { key: "sugarGMax", label: "Sugar (g, max)" },
+  { key: "sodiumMgMax", label: "Sodium (mg, max)" },
+  { key: "satFatGMax", label: "Saturated fat (g, max)" },
+] as const;
+
+type MicroValues = Record<(typeof MICRO_FIELDS)[number]["key"], string>;
+
 /* Mounted fresh per edit session, so state initializes from the profile. */
 function GoalEditor({
   profile,
@@ -57,6 +68,15 @@ function GoalEditor({
       };
     });
   });
+  const [micros, setMicros] = useState<MicroValues>(() => {
+    const first = profile.days[0];
+    return {
+      fiberG: first?.fiberG != null ? String(first.fiberG) : "",
+      sugarGMax: first?.sugarGMax != null ? String(first.sugarGMax) : "",
+      sodiumMgMax: first?.sodiumMgMax != null ? String(first.sodiumMgMax) : "",
+      satFatGMax: first?.satFatGMax != null ? String(first.satFatGMax) : "",
+    };
+  });
   const [busy, setBusy] = useState(false);
 
   function setValue(dow: number, key: keyof DayValues, value: string) {
@@ -68,12 +88,25 @@ function GoalEditor({
   }
 
   async function save() {
+    // Blank micro = no target; otherwise it must be a non-negative number.
+    const microValues: Partial<Record<keyof MicroValues, number>> = {};
+    for (const field of MICRO_FIELDS) {
+      const raw = micros[field.key].trim();
+      if (raw === "") continue;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0) {
+        toast.error(`Check the ${field.label} value`);
+        return;
+      }
+      microValues[field.key] = value;
+    }
     const parsed = days.map((day, dayOfWeek) => ({
       dayOfWeek,
       calories: Number(day.calories),
       proteinG: Number(day.proteinG),
       carbsG: Number(day.carbsG),
       fatG: Number(day.fatG),
+      ...microValues,
     }));
     for (const day of parsed) {
       if (
@@ -154,6 +187,32 @@ function GoalEditor({
             </tbody>
           </table>
         </div>
+
+        {/* Optional daily micro limits (same value every day of the week) */}
+        <div>
+          <p className="mb-2 text-sm font-semibold">Daily limits (optional)</p>
+          <div className="grid grid-cols-2 gap-2">
+            {MICRO_FIELDS.map((field) => (
+              <label key={field.key} className="block">
+                <span className="mb-1 block text-xs text-muted-foreground">
+                  {field.label}
+                </span>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  placeholder="—"
+                  className="h-9 px-2 text-sm"
+                  value={micros[field.key]}
+                  onChange={(event) =>
+                    setMicros((prev) => ({ ...prev, [field.key]: event.target.value }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+
         <Button disabled={busy} onClick={save}>
           {busy ? "Saving..." : "Save goals"}
         </Button>

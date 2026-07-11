@@ -10,7 +10,19 @@ import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states"
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { CustomBuilder } from "@/components/stores/custom-builder";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
@@ -31,6 +43,7 @@ interface StoreInfo {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"];
 
 /** Current wall-clock "HH:MM", but only when the target date is today. */
 function currentTimeIfToday(date: string): string | undefined {
@@ -110,24 +123,45 @@ function StoreView({ slug }: { slug: string }) {
     router.push(`/diary/log?${p.toString()}`);
   }
 
-  async function logOrder(order: CustomStoreOrderDTO) {
+  // Log-a-saved-build confirm sheet: meal, servings, and time are editable
+  // before anything is written (defaults keep it a two-tap flow).
+  const [logSheetOrder, setLogSheetOrder] = useState<CustomStoreOrderDTO | null>(null);
+  const [logMeal, setLogMeal] = useState(mealName);
+  const [logServings, setLogServings] = useState("1");
+  const [logTime, setLogTime] = useState("");
+
+  function openLogSheet(order: CustomStoreOrderDTO) {
+    setLogMeal(mealName);
+    setLogServings("1");
+    setLogTime(currentTimeIfToday(date) ?? "");
+    setLogSheetOrder(order);
+  }
+
+  async function logOrder() {
+    const order = logSheetOrder;
+    if (!order) return;
+    const servings = Number(logServings);
+    if (!Number.isFinite(servings) || servings <= 0) {
+      toast.error("Enter a number of servings");
+      return;
+    }
     setOrderBusy(order.id);
-    const eatenTime = currentTimeIfToday(date);
     try {
       await apiFetch("/api/diary/entries", {
         method: "POST",
         body: JSON.stringify({
           date,
-          mealName,
+          mealName: logMeal,
           customStoreOrderId: order.id,
-          quantity: 1,
+          quantity: servings,
           servingMultiplier: 1,
-          servingText: "1 order",
-          eatenTime,
+          servingText: servings === 1 ? "1 order" : `${servings} orders`,
+          eatenTime: logTime || undefined,
           loggedVia: "store_builder",
         }),
       });
-      toast.success(`Logged ${order.name} to ${mealName}`);
+      toast.success(`Logged ${order.name} to ${logMeal}`);
+      setLogSheetOrder(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Logging failed");
     } finally {
@@ -426,7 +460,7 @@ function StoreView({ slug }: { slug: string }) {
                   <Button
                     size="sm"
                     disabled={orderBusy === order.id}
-                    onClick={() => logOrder(order)}
+                    onClick={() => openLogSheet(order)}
                   >
                     {orderBusy === order.id ? "..." : "Log"}
                   </Button>
@@ -437,6 +471,85 @@ function StoreView({ slug }: { slug: string }) {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Log-a-saved-build confirm sheet */}
+      <Sheet
+        open={logSheetOrder !== null}
+        onOpenChange={(open) => {
+          if (!open) setLogSheetOrder(null);
+        }}
+      >
+        <SheetContent side="bottom" className="sheet-safe-bottom rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle className="truncate">{logSheetOrder?.name}</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-4 px-4 pb-6">
+            <div className="divide-y rounded-2xl border bg-card text-sm">
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <span className="font-medium">Meal</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 rounded-lg border px-3 py-1.5 font-semibold text-primary"
+                    >
+                      {logMeal}
+                      <ChevronDown className="size-3.5" aria-hidden />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {MEALS.map((meal) => (
+                      <DropdownMenuItem key={meal} onSelect={() => setLogMeal(meal)}>
+                        {meal}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <label htmlFor="order-servings" className="font-medium">
+                  Number of Servings
+                </label>
+                <Input
+                  id="order-servings"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={logServings}
+                  onFocus={(event) => event.currentTarget.select()}
+                  onChange={(event) => {
+                    const raw = event.target.value.replace(/[^0-9.]/g, "");
+                    const parts = raw.split(".");
+                    setLogServings(
+                      parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : raw,
+                    );
+                  }}
+                  className="h-9 w-24 text-right font-semibold"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <label htmlFor="order-time" className="font-medium">
+                  Time
+                </label>
+                <input
+                  id="order-time"
+                  type="time"
+                  value={logTime}
+                  onChange={(event) => setLogTime(event.target.value)}
+                  className="rounded-lg border bg-transparent px-3 py-1.5 font-semibold text-primary"
+                />
+              </div>
+            </div>
+            <Button
+              className="w-full"
+              disabled={logSheetOrder !== null && orderBusy === logSheetOrder.id}
+              onClick={logOrder}
+            >
+              {logSheetOrder !== null && orderBusy === logSheetOrder.id ? "..." : "Log"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </main>
   );
 }

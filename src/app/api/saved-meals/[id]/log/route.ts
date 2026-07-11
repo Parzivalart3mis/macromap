@@ -8,6 +8,7 @@ import { diaryEntries, foods, savedMeals } from "@/lib/db/schema";
 import { getDiaryPayload, getOrCreateDiaryDay, getOrCreateMeal } from "@/lib/diary/service";
 import { roundNutrition, scaleNutrition } from "@/lib/nutrition";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { scaleServingText } from "@/lib/units";
 
 const logSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
@@ -39,16 +40,6 @@ export async function POST(
     const meal = await getOrCreateMeal(day.id, input.mealName);
     const servings = input.servings ?? 1;
 
-    // Scale the leading amount of a "2 slices"-style serving text with the
-    // whole-meal multiplier (same rule the entry PATCH endpoint applies).
-    const scaleServingText = (text: string | undefined): string | undefined =>
-      servings === 1
-        ? text
-        : text?.replace(
-            /^\s*([\d.]+)/,
-            (_, num: string) => `${Math.round(Number(num) * servings * 100) / 100}`,
-          );
-
     await db.insert(diaryEntries).values(
       savedMeal.entriesSnapshotJson.map((line) => ({
         diaryMealId: meal.id,
@@ -63,6 +54,7 @@ export async function POST(
           label: line.label,
           serving: scaleServingText(
             line.serving ?? (line.customStoreOrderId ? "1 order" : undefined),
+            servings,
           ),
           brand: line.brand,
         },

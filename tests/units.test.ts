@@ -5,6 +5,7 @@ import {
   computeServing,
   formatNum,
   nativeServingTextFor,
+  scaleServingText,
   servingOptions,
   unitKindOf,
 } from "@/lib/units";
@@ -196,6 +197,37 @@ describe("computeServing", () => {
     expect(one.nutrition.calories).toBeCloseTo(105 * (136 / 118), 0);
     // The logged pair (quantity, multiplier) must reproduce the same factor.
     expect(one.quantity * one.servingMultiplier).toBeCloseTo(136 / 118, 5);
+  });
+});
+
+describe("scaleServingText", () => {
+  it("scales the leading amount and drops stale parentheticals", () => {
+    expect(scaleServingText("2 slices", 2)).toBe("4 slices");
+    expect(scaleServingText("1 medium (118 g)", 2)).toBe("2 medium");
+    expect(scaleServingText("31 g (1 scoop)", 2)).toBe("62 g");
+    expect(scaleServingText("1 order", 3)).toBe("3 order");
+  });
+
+  it("passes through unscaled or unnumbered texts", () => {
+    expect(scaleServingText("1 medium (118 g)", 1)).toBe("1 medium (118 g)");
+    expect(scaleServingText("Custom build", 2)).toBe("Custom build");
+    expect(scaleServingText(undefined, 2)).toBeUndefined();
+  });
+
+  it("scales multiplied bottle texts", () => {
+    expect(scaleServingText("2 × 16.9 fl oz", 2)).toBe("4 × 16.9 fl oz");
+  });
+});
+
+describe("numeric-unit serving text", () => {
+  it("writes multiples of number-led units with ×", () => {
+    const soda = food({
+      servingSizeValue: 1,
+      servingSizeUnit: "can",
+      alternateServings: [{ unit: "16.9 fl oz", multiplier: 1.4083, label: "16.9 fl oz" }],
+    });
+    const bottle = servingOptions(soda).find((o) => o.unit === "16.9 fl oz")!;
+    expect(computeServing(soda, bottle, 2).servingText).toBe("2 × 16.9 fl oz");
   });
 });
 

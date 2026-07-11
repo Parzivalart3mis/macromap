@@ -76,6 +76,23 @@ export function nativeServingLabel(
 }
 
 /**
+ * Rescale a stored serving text's amount ("2 slices" ×2 → "4 slices").
+ * A trailing parenthetical is a description of the *original* size
+ * ("1 medium (118 g)") and would go stale, so it is dropped when scaling.
+ * Texts with no leading number pass through unchanged.
+ */
+export function scaleServingText(
+  text: string | undefined,
+  ratio: number,
+): string | undefined {
+  if (text === undefined || ratio === 1) return text;
+  const match = text.match(/^\s*([\d.]+)(.*)$/);
+  if (!match || !Number.isFinite(Number(match[1]))) return text;
+  const rest = match[2].replace(/\s*\([^)]*\)\s*$/, "");
+  return `${Math.round(Number(match[1]) * ratio * 100) / 100}${rest}`;
+}
+
+/**
  * Serving text for N native servings of a food — the label at exactly 1
  * serving ("1 medium (118 g)", "2 slices"), a pluralized amount otherwise
  * ("4 cookies", "236 g").
@@ -195,9 +212,14 @@ export function computeServing(
   const nutrition = roundNutrition(scaleNutrition(dtoNutrition(food), factor));
   // At exactly 1 serving the option's label is the truest description
   // ("1 medium (118 g)", "16.9 fl oz", "1 serving (6 cookies)"); otherwise
-  // write the scaled amount with a pluralized count unit ("4 cookies").
+  // write the scaled amount with a pluralized count unit ("4 cookies"). Units
+  // that begin with their own number ("16.9 fl oz") read as "2 × 16.9 fl oz".
   const amount = servings * option.value;
   const servingText =
-    servings === 1 ? option.label : `${formatNum(amount)} ${pluralizeUnit(option.unit, amount)}`;
+    servings === 1
+      ? option.label
+      : /^\d/.test(option.unit)
+        ? `${formatNum(servings)} × ${option.unit}`
+        : `${formatNum(amount)} ${pluralizeUnit(option.unit, amount)}`;
   return { quantity, servingMultiplier, servingText, nutrition };
 }

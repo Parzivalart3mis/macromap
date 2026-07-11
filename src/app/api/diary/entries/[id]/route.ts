@@ -7,6 +7,7 @@ import { diaryDays, diaryEntries, diaryMeals } from "@/lib/db/schema";
 import { getOrCreateMeal } from "@/lib/diary/service";
 import { roundNutrition, scaleNutrition } from "@/lib/nutrition";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { scaleServingText } from "@/lib/units";
 import { updateDiaryEntrySchema } from "@/lib/validations/diary";
 import type { NutritionSnapshot } from "@/types/nutrition";
 
@@ -52,12 +53,13 @@ export async function PATCH(
       const rescaled = roundNutrition(
         scaleNutrition(nutrition as NutritionSnapshot, ratio),
       );
-      // Scale the "2 ml"-style serving text's amount to match the new quantity.
-      const nextServing = serving?.replace(
-        /^\s*([\d.]+)/,
-        (_, num: string) => `${Math.round(Number(num) * ratio * 100) / 100}`,
-      );
-      updates.nutritionSnapshotJson = { ...rescaled, label, serving: nextServing, brand };
+      // Scale the "2 slices"-style serving text's amount to match the new quantity.
+      updates.nutritionSnapshotJson = {
+        ...rescaled,
+        label,
+        serving: scaleServingText(serving, ratio),
+        brand,
+      };
     }
 
     if (input.mealName) {

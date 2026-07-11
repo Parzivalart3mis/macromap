@@ -1,12 +1,15 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Plus, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Sparkles } from "lucide-react";
+import { useState } from "react";
 
 import { ListSkeleton } from "@/components/async-states";
 import { AnimatedNumber } from "@/components/diary/animated-number";
 import { CalorieRing } from "@/components/diary/calorie-ring";
 import { MealCard } from "@/components/diary/meal-card";
+import { DailyGoalBars } from "@/components/nutrition/goal-bars";
+import { NutritionPanel } from "@/components/nutrition/nutrition-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -94,6 +97,8 @@ export function DiaryDayContent({
   onAnalyze: () => void;
   onAddMeal: () => void;
 }) {
+  const [nutritionOpen, setNutritionOpen] = useState(false);
+
   if (!payload) {
     return <ListSkeleton rows={5} />;
   }
@@ -180,6 +185,32 @@ export function DiaryDayContent({
             colorVar="--macro-protein"
           />
         </div>
+      </Card>
+
+      {/* Day nutrition report: full micro totals + optional micro goal bars */}
+      <Card className="p-4">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between text-sm font-semibold"
+          aria-expanded={nutritionOpen}
+          onClick={() => setNutritionOpen((open) => !open)}
+        >
+          Nutrition
+          <span className="flex items-center gap-1 font-semibold text-primary">
+            {nutritionOpen ? "Hide" : "Show"}
+            {nutritionOpen ? (
+              <ChevronUp className="size-4" aria-hidden />
+            ) : (
+              <ChevronDown className="size-4" aria-hidden />
+            )}
+          </span>
+        </button>
+        {nutritionOpen ? (
+          <div className="animate-fade-up space-y-4 pt-3">
+            {goal ? <DailyGoalBars nutrition={totals} goal={goal} /> : null}
+            <NutritionPanel nutrition={totals} showAll />
+          </div>
+        ) : null}
       </Card>
 
       {/* Diary */}
