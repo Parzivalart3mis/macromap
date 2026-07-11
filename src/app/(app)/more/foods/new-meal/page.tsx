@@ -165,7 +165,25 @@ function CreateMealView() {
   }
 
   function removeItem(key: string) {
-    setItems((prev) => prev.filter((item) => itemKey(item) !== key));
+    setItems((prev) => {
+      const index = prev.findIndex((item) => itemKey(item) === key);
+      if (index === -1) return prev;
+      const removed = prev[index];
+      toast(`Removed ${removed.food.name}`, {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            setItems((current) => {
+              // Re-insert at the original position unless it was re-added meanwhile.
+              if (current.some((item) => itemKey(item) === key)) return current;
+              const next = [...current];
+              next.splice(Math.min(index, next.length), 0, removed);
+              return next;
+            }),
+        },
+      });
+      return prev.filter((item) => itemKey(item) !== key);
+    });
   }
 
   async function save() {

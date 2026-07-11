@@ -95,6 +95,7 @@ function CopyDialog({
             customStoreOrderId: entry.customStoreOrderId ?? undefined,
             quantity: entry.quantity,
             servingMultiplier: entry.servingMultiplier,
+            servingText: entry.nutritionSnapshotJson.serving,
             eatenTime: entry.eatenTime ?? undefined,
             loggedVia: "saved_meal",
           }),
@@ -176,7 +177,18 @@ function MealDetail() {
     entries: [],
     totals: { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 },
   };
-  const { totals } = meal;
+  // Totals over the *visible* rows so a swiped-away entry updates the ring
+  // instantly instead of waiting for the server round-trip.
+  const visibleEntries = meal.entries.filter((entry) => !hidden.has(entry.id));
+  const totals = visibleEntries.reduce(
+    (acc, entry) => ({
+      calories: acc.calories + entry.nutritionSnapshotJson.calories,
+      proteinG: acc.proteinG + entry.nutritionSnapshotJson.proteinG,
+      carbsG: acc.carbsG + entry.nutritionSnapshotJson.carbsG,
+      fatG: acc.fatG + entry.nutritionSnapshotJson.fatG,
+    }),
+    { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+  );
 
   function switchMeal(next: string) {
     router.replace(`/diary/meal?date=${date}&meal=${encodeURIComponent(next)}`, {
@@ -196,6 +208,34 @@ function MealDetail() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Save failed");
     }
+  }
+
+  /**
+   * Apply an edit-dialog result to local state immediately (updated entry, or
+   * null when it left this meal); the background refetch reconciles.
+   */
+  function applyEntryUpdate(entryId: string, updated?: DiaryEntryDTO | null) {
+    if (updated !== undefined) {
+      setPayload((prev) =>
+        prev
+          ? {
+              ...prev,
+              meals: prev.meals.map((m) =>
+                m.mealName !== mealName
+                  ? m
+                  : {
+                      ...m,
+                      entries:
+                        updated === null
+                          ? m.entries.filter((e) => e.id !== entryId)
+                          : m.entries.map((e) => (e.id === updated.id ? updated : e)),
+                    },
+              ),
+            }
+          : prev,
+      );
+    }
+    load();
   }
 
   async function deleteEntry(entry: DiaryEntryDTO) {
@@ -219,6 +259,7 @@ function MealDetail() {
                         customStoreOrderId: entry.customStoreOrderId ?? undefined,
                         quantity: entry.quantity,
                         servingMultiplier: entry.servingMultiplier,
+                        servingText: entry.nutritionSnapshotJson.serving,
                         eatenTime: entry.eatenTime ?? undefined,
                         loggedVia: entry.loggedVia,
                       }),
@@ -358,8 +399,7 @@ function MealDetail() {
             />
           ) : (
             <div className="stagger-children space-y-2">
-              {meal.entries
-                .filter((entry) => !hidden.has(entry.id))
+              {visibleEntries
                 .map((entry) => (
                   <SwipeableRow key={entry.id} onDelete={() => deleteEntry(entry)}>
                     <button
@@ -412,7 +452,7 @@ function MealDetail() {
           onOpenChange={(open) => {
             if (!open) setEditing(null);
           }}
-          onChanged={load}
+          onChanged={(updated) => applyEntryUpdate(editing.id, updated)}
         />
       ) : null}
       {copying ? (

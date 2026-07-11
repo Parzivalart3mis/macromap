@@ -58,7 +58,12 @@ export function EntryEditDialog({
   mealName: string;
   goal?: GoalDTO | null;
   onOpenChange: (open: boolean) => void;
-  onChanged: () => void;
+  /**
+   * Fires after a successful save/delete. Receives the updated entry (same
+   * meal), or null when the entry left this meal (moved or deleted) so the
+   * caller can update its list without waiting for a refetch.
+   */
+  onChanged: (updated?: DiaryEntryDTO | null) => void;
 }) {
   const [servings, setServings] = useState<string>(() => String(entry.quantity));
   const [targetMeal, setTargetMeal] = useState(mealName);
@@ -110,17 +115,20 @@ export function EntryEditDialog({
       if (quantity !== entry.quantity) changes.quantity = quantity;
       if (targetMeal !== mealName) changes.mealName = targetMeal;
       if (eatenTime !== (entry.eatenTime ?? "")) changes.eatenTime = eatenTime || null;
+      let updated: DiaryEntryDTO | null | undefined;
       if (Object.keys(changes).length > 0) {
-        await apiFetch(`/api/diary/entries/${entry.id}`, {
-          method: "PATCH",
-          body: JSON.stringify(changes),
-        });
+        const response = await apiFetch<{ entry: DiaryEntryDTO }>(
+          `/api/diary/entries/${entry.id}`,
+          { method: "PATCH", body: JSON.stringify(changes) },
+        );
+        // Moved entries leave this meal's list.
+        updated = targetMeal !== mealName ? null : response.entry;
         toast.success(
           targetMeal !== mealName ? `Moved to ${targetMeal}` : "Entry updated",
         );
       }
       onOpenChange(false);
-      onChanged();
+      onChanged(updated);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Update failed");
     } finally {
@@ -133,7 +141,7 @@ export function EntryEditDialog({
     try {
       await apiFetch(`/api/diary/entries/${entry.id}`, { method: "DELETE" });
       onOpenChange(false);
-      onChanged();
+      onChanged(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Delete failed");
     } finally {
