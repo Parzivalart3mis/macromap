@@ -144,10 +144,19 @@ async function searchOpenFoodFacts(
     const suffix = perServing ? "_serving" : "_100g";
     const calories = n[`energy-kcal${suffix}`];
     if (!product.product_name || calories == null) continue;
+    // OFF entries with no macro data at all are junk stubs — a real product
+    // (even a zero-calorie soda) reports explicit protein/carb/fat values.
+    if (
+      n[`proteins${suffix}`] == null &&
+      n[`carbohydrates${suffix}`] == null &&
+      n[`fat${suffix}`] == null
+    ) {
+      continue;
+    }
     const servingQuantity = Number(product.serving_quantity);
     const result: ExternalFoodResult = {
       source: "open_food_facts",
-      name: product.product_name,
+      name: titleCase(product.product_name),
       brandName: product.brands?.split(",")[0]?.trim() || null,
       barcode: product.code ?? null,
       servingSizeValue: perServing && servingQuantity > 0 ? servingQuantity : 100,
@@ -181,6 +190,25 @@ function assignIfPresent(
   value: number | undefined,
 ) {
   if (value != null) target[key] = value;
+}
+
+/**
+ * Drop external results that duplicate a food already in the shared database
+ * (matched by barcode, or by normalized name + brand) — the local row is the
+ * one the user should log, since it carries verification and history.
+ */
+export function dedupeAgainstLocal<
+  T extends { name: string; brandName: string | null; barcode: string | null },
+>(results: T[], locals: { name: string; brandName: string | null; barcode: string | null }[]): T[] {
+  const normalize = (value: string | null) =>
+    (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const localBarcodes = new Set(locals.map((f) => f.barcode).filter(Boolean));
+  const localNames = new Set(locals.map((f) => `${normalize(f.name)}|${normalize(f.brandName)}`));
+  return results.filter(
+    (result) =>
+      !(result.barcode && localBarcodes.has(result.barcode)) &&
+      !localNames.has(`${normalize(result.name)}|${normalize(result.brandName)}`),
+  );
 }
 
 /** USDA descriptions are SHOUTED ("JEWEL OSCO, WHEAT BREAD") — soften them. */

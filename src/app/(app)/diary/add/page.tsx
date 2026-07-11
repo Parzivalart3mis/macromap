@@ -320,11 +320,14 @@ function AddFoodView() {
   const [stores, setStores] = useState<StoreDTO[]>([]);
 
   useEffect(() => {
-    // History/My Meals/My Foods refresh on mount and whenever this screen
+    // History/My Meals/My Foods refresh on mount, on meal switch (History is
+    // ranked by what's usually eaten in that meal), and whenever this screen
     // becomes visible again (e.g. returning here after logging a food), so a
     // just-logged item shows up in "Recently logged".
     function loadLibrary() {
-      apiFetch<{ recent: RecentItem[] }>("/api/diary/recent")
+      apiFetch<{ recent: RecentItem[] }>(
+        `/api/diary/recent?meal=${encodeURIComponent(mealName)}`,
+      )
         .then((data) => setRecent(data.recent))
         .catch(() => setRecent([]));
       apiFetch<{ savedMeals: SavedMealDTO[] }>("/api/saved-meals")
@@ -350,7 +353,7 @@ function AddFoodView() {
       window.removeEventListener("pageshow", loadLibrary);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [mealName]);
 
   // Keep search + meal in the URL so back-navigation restores this exact view.
   function syncUrl(nextQuery: string, nextMeal: string) {

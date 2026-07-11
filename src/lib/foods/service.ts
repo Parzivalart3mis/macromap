@@ -57,6 +57,14 @@ export async function searchFoods(
   // the user's OWN foods (created or logged) come first, then globally popular
   // foods (log_count), then similarity, with the verified badge as final
   // tiebreak.
+  // Typing a food's exact name ("banana", "coca cola") pins it to the top,
+  // whether the match is the bare name or "name + brand".
+  const exactMatch = sql<number>`case
+    when lower(${foods.name}) = lower(${query}) then 2
+    when lower(trim(${foods.name} || ' ' || coalesce(${foods.brandName}, ''))) = lower(${query})
+      or lower(trim(coalesce(${foods.brandName}, '') || ' ' || ${foods.name})) = lower(${query})
+      then 1
+    else 0 end`;
   const nameMatch = sql<number>`case when ${foods.name} ilike ${"%" + query + "%"} then 1 else 0 end`;
   const substrMatch = sql<number>`case when ${searchTarget} ilike ${"%" + query + "%"} then 1 else 0 end`;
   const wordScore = sql<number>`word_similarity(${query}, ${searchTarget})`;
@@ -80,6 +88,7 @@ export async function searchFoods(
       ),
     )
     .orderBy(
+      desc(exactMatch),
       desc(nameMatch),
       desc(mine),
       desc(foods.logCount),
