@@ -18,12 +18,17 @@ interface Selection {
 
 export function CustomBuilder({
   slug,
+  mealName = defaultMealForNow(),
+  date = todayISO(),
   ingredients,
   editOrder,
   onSaved,
   onCancelEdit,
 }: {
   slug: string;
+  /** Diary meal/date to log into; defaults to "log now" when opened standalone. */
+  mealName?: string;
+  date?: string;
   ingredients: StoreIngredientDTO[];
   editOrder?: CustomStoreOrderDTO | null;
   onSaved: (order: CustomStoreOrderDTO) => void;
@@ -127,16 +132,18 @@ export function CustomBuilder({
         { method: isEdit ? "PATCH" : "POST", body },
       );
       if (logNow) {
-        const mealName = defaultMealForNow();
-        // Always logs for today, so stamp the current wall-clock time.
-        const now = new Date();
-        const eatenTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-          now.getMinutes(),
-        ).padStart(2, "0")}`;
+        // Stamp the current time only when logging into today (a past date
+        // keeps its time blank).
+        const eatenTime =
+          date === todayISO()
+            ? `${String(new Date().getHours()).padStart(2, "0")}:${String(
+                new Date().getMinutes(),
+              ).padStart(2, "0")}`
+            : undefined;
         await apiFetch("/api/diary/entries", {
           method: "POST",
           body: JSON.stringify({
-            date: todayISO(),
+            date,
             mealName,
             customStoreOrderId: order.id,
             quantity: 1,

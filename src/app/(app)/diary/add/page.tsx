@@ -783,7 +783,7 @@ function AddFoodView() {
                 <div className="space-y-4">
                   {matchedStore ? (
                     <Link
-                      href={`/stores/${matchedStore.slug}`}
+                      href={`/stores/${matchedStore.slug}?meal=${encodeURIComponent(mealName)}&date=${date}`}
                       className="card-lift flex items-center gap-3 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]"
                     >
                       <span

@@ -2,8 +2,8 @@
 
 import { ArrowLeft, ChevronDown, Pencil, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
@@ -30,9 +30,24 @@ interface StoreInfo {
   categories: string[];
 }
 
-export default function StorePage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = use(params);
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Current wall-clock "HH:MM", but only when the target date is today. */
+function currentTimeIfToday(date: string): string | undefined {
+  if (date !== todayISO()) return undefined;
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
+function StoreView({ slug }: { slug: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Meal/date context forwarded from the diary Add-Food flow. Absent when the
+  // store is opened as a standalone browse (Food tab) — fall back to "log now".
+  const paramDate = searchParams.get("date");
+  const date = paramDate && DATE_RE.test(paramDate) ? paramDate : todayISO();
+  const mealParam = searchParams.get("meal");
+  const mealName = mealParam && mealParam.length <= 40 ? mealParam : defaultMealForNow();
   const [info, setInfo] = useState<StoreInfo | null>(null);
   const [menu, setMenu] = useState<StoreMenuItemDTO[] | null>(null);
   const [ingredients, setIngredients] = useState<StoreIngredientDTO[] | null>(null);
@@ -88,8 +103,8 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
   function openLogFood(food: FoodDTO) {
     const p = new URLSearchParams({
       foodId: food.id,
-      date: todayISO(),
-      meal: defaultMealForNow(),
+      date,
+      meal: mealName,
       via: "store_builder",
     });
     router.push(`/diary/log?${p.toString()}`);
@@ -97,16 +112,12 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
 
   async function logOrder(order: CustomStoreOrderDTO) {
     setOrderBusy(order.id);
-    const mealName = defaultMealForNow();
-    const now = new Date();
-    const eatenTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-      now.getMinutes(),
-    ).padStart(2, "0")}`;
+    const eatenTime = currentTimeIfToday(date);
     try {
       await apiFetch("/api/diary/entries", {
         method: "POST",
         body: JSON.stringify({
-          date: todayISO(),
+          date,
           mealName,
           customStoreOrderId: order.id,
           quantity: 1,
@@ -322,6 +333,8 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
             <CustomBuilder
               key={editingOrder?.id ?? "new"}
               slug={slug}
+              mealName={mealName}
+              date={date}
               ingredients={ingredients}
               editOrder={editingOrder}
               onSaved={() => {
@@ -424,5 +437,20 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
         </TabsContent>
       </Tabs>
     </main>
+  );
+}
+
+export default function StorePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
+  return (
+    <Suspense
+      fallback={
+        <main>
+          <ListSkeleton rows={6} />
+        </main>
+      }
+    >
+      <StoreView slug={slug} />
+    </Suspense>
   );
 }
