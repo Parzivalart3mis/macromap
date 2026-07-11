@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useVoiceLogging } from "@/hooks/useVoiceLogging";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
+import { formatNum } from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type {
   ExternalFoodResultDTO,
@@ -62,6 +63,17 @@ function currentTimeIfToday(date: string): string | undefined {
   if (date !== todayISO()) return undefined;
   const now = new Date();
   return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * Serving text for logging N native servings of a food, e.g. "2 slices" — so
+ * quick-logged entries show the real serving instead of the "1 serving" fallback.
+ */
+function nativeServingText(
+  food: { servingSizeValue: number; servingSizeUnit: string },
+  quantity: number,
+): string {
+  return `${formatNum(quantity * food.servingSizeValue)} ${food.servingSizeUnit}`;
 }
 
 /** Standard food line: "Brand, serving size" (+ last quantity and calories). */
@@ -188,6 +200,9 @@ function SuggestionsReview({
           foodId = created.foodId;
           quantity = 1;
         }
+        const servingText = suggestion.matchedFood
+          ? nativeServingText(suggestion.matchedFood, quantity)
+          : "1 serving";
         await apiFetch("/api/diary/entries", {
           method: "POST",
           body: JSON.stringify({
@@ -196,6 +211,7 @@ function SuggestionsReview({
             foodId,
             quantity,
             servingMultiplier: 1,
+            servingText,
             eatenTime: currentTimeIfToday(date),
             loggedVia,
           }),
@@ -417,6 +433,7 @@ function AddFoodView() {
         foodId: food.id,
         quantity,
         servingMultiplier: 1,
+        servingText: nativeServingText(food, quantity),
         eatenTime: currentTimeIfToday(date),
         loggedVia: via,
       }),
