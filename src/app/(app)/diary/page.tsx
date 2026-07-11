@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ErrorState } from "@/components/async-states";
 import { CalendarPopover } from "@/components/diary/calendar-popover";
 import { DiaryDayContent } from "@/components/diary/day-content";
+import { StreakPopover } from "@/components/diary/streak-popover";
 import { WeekStrip } from "@/components/diary/week-strip";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,9 @@ import { cn } from "@/lib/utils";
 import type { DiaryPayloadDTO, StreakDTO } from "@/types/api";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// One-time celebration thresholds; the highest reached is kept in localStorage.
+const STREAK_MILESTONES = [7, 30, 100, 365];
+const MILESTONE_KEY = "mm-streak-milestone";
 
 const slideVariants = {
   enter: (dir: number) => ({ x: dir >= 0 ? "100%" : "-100%" }),
@@ -56,7 +60,9 @@ function DiaryHome() {
   const [insights, setInsights] = useState<string[] | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [streakOpen, setStreakOpen] = useState(false);
   const dateBtnRef = useRef<HTMLButtonElement>(null);
+  const streakBtnRef = useRef<HTMLButtonElement>(null);
   const loadingRef = useRef<Set<string>>(new Set());
   const dateRef = useRef(date);
   useEffect(() => {
@@ -85,6 +91,15 @@ function DiaryHome() {
       .then((data) => {
         setStreak(data.streak);
         setRecentDates(data.recentDates);
+        // Celebrate 7/30/100/365-day milestones once each, on the day reached.
+        if (data.streak.todayLogged) {
+          const reached = STREAK_MILESTONES.filter((m) => data.streak.current >= m).pop();
+          const seen = Number(window.localStorage.getItem(MILESTONE_KEY) ?? 0);
+          if (reached && reached > seen) {
+            window.localStorage.setItem(MILESTONE_KEY, String(reached));
+            toast.success(`${reached}-day logging streak! 🔥`);
+          }
+        }
       })
       .catch(() => undefined);
   }, []);
@@ -207,18 +222,17 @@ function DiaryHome() {
             </Button>
           </div>
           {streak ? (
-            <span
+            <button
+              ref={streakBtnRef}
+              type="button"
+              aria-label="Streak details"
+              onClick={() => setStreakOpen(true)}
               className={cn(
                 "flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold",
                 streak.todayLogged
                   ? "bg-cta/15 text-cta-foreground dark:text-cta"
                   : "bg-muted text-muted-foreground",
               )}
-              title={
-                streak.todayLogged
-                  ? `Longest streak: ${streak.longest} days`
-                  : "Log something today to keep the streak going"
-              }
             >
               <Flame
                 className={cn("size-4 text-cta", streak.todayLogged && "animate-flame")}
@@ -226,7 +240,7 @@ function DiaryHome() {
                 aria-hidden
               />
               {streak.current}
-            </span>
+            </button>
           ) : null}
         </div>
         <WeekStrip
@@ -236,6 +250,16 @@ function DiaryHome() {
           onSelect={goTo}
         />
       </header>
+
+      {streakOpen && streak ? (
+        <StreakPopover
+          streak={streak}
+          loggedDates={recentDates}
+          today={todayISO()}
+          anchorRef={streakBtnRef}
+          onClose={() => setStreakOpen(false)}
+        />
+      ) : null}
 
       {calendarOpen ? (
         <CalendarPopover
