@@ -26,7 +26,13 @@ import {
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { computeServing, formatNum, servingOptions, type UnitOption } from "@/lib/units";
+import {
+  computeServing,
+  formatNum,
+  nativeServingLabel,
+  servingOptions,
+  type UnitOption,
+} from "@/lib/units";
 import type { DiaryPayloadDTO, FoodDTO, GoalDTO } from "@/types/api";
 
 const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"];
@@ -181,7 +187,7 @@ function LogFoodView() {
           </h2>
           <p className="text-sm text-muted-foreground">
             {food.brandName ? `${food.brandName}, ` : ""}
-            {food.servingSizeValue} {food.servingSizeUnit}
+            {nativeServingLabel(food)}
           </p>
           {food.description ? (
             <p className="diary-entry-text mt-2 rounded-xl bg-muted/60 px-3 py-2 text-sm text-foreground/80">

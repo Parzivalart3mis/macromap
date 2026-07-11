@@ -105,6 +105,10 @@ export const foods = pgTable(
     }),
     servingSizeValue: doublePrecision("serving_size_value").notNull(),
     servingSizeUnit: text("serving_size_unit").notNull(),
+    // Optional display label for the native serving in the picker, shown instead
+    // of "<value> <unit>". Lets a weight-based base (e.g. 118 g, needed for the
+    // g/oz/lb/kg conversions) read as "1 medium (118 g)".
+    servingSizeLabel: text("serving_size_label"),
     // Optional extra serving sizes, each a multiple of the base serving.
     alternateServings: jsonb("alternate_servings_json")
       .$type<AlternateServing[]>()

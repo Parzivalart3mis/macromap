@@ -68,6 +68,13 @@ export function formatNum(n: number): string {
   return String(Math.round(n * 100) / 100);
 }
 
+/** How the food's native serving reads: its override label, or "<value> <unit>". */
+export function nativeServingLabel(
+  food: Pick<FoodDTO, "servingSizeValue" | "servingSizeUnit" | "servingSizeLabel">,
+): string {
+  return food.servingSizeLabel ?? `${formatNum(food.servingSizeValue)} ${food.servingSizeUnit}`;
+}
+
 /** Recognises the food's serving unit; the first known token wins ("g (1 scoop)" → g). */
 function classifyUnit(rawUnit: string): { kind: UnitKind; canonical: string; factor: number } {
   const tokens = rawUnit.toLowerCase().match(/[a-z]+/g) ?? [];
@@ -109,9 +116,9 @@ export function servingOptions(food: FoodDTO): UnitOption[] {
   const { kind, canonical } = classifyUnit(food.servingSizeUnit);
   const options: UnitOption[] = [];
   const seen = new Set<number>();
-  const push = (value: number, unit: string, baseAmount: number) => {
+  const push = (value: number, unit: string, baseAmount: number, label?: string) => {
     seen.add(Math.round(baseAmount * 1000) / 1000);
-    options.push({ label: `${formatNum(value)} ${unit}`, value, unit, baseAmount });
+    options.push({ label: label ?? `${formatNum(value)} ${unit}`, value, unit, baseAmount });
   };
   const add = (value: number, unit: string, baseAmount: number) => {
     const key = Math.round(baseAmount * 1000) / 1000;
@@ -120,8 +127,8 @@ export function servingOptions(food: FoodDTO): UnitOption[] {
   };
 
   const base = baseServingAmount(food);
-  // Native serving first (uses the food's own unit string).
-  push(food.servingSizeValue, food.servingSizeUnit, base);
+  // Native serving first (its own unit string, or an explicit override label).
+  push(food.servingSizeValue, food.servingSizeUnit, base, food.servingSizeLabel ?? undefined);
 
   // User-defined extra serving sizes, each a multiple of the base serving.
   // Added for every food kind (including count-based). Labelled with the base

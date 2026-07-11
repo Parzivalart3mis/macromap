@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
+import { nativeServingLabel } from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type { DiaryEntryDTO, FoodDTO, GoalDTO } from "@/types/api";
 import { NUTRITION_KEYS, type NutritionSnapshot } from "@/types/nutrition";
@@ -93,9 +94,7 @@ export function EntryEditDialog({
   // the entry (so store items and custom builds still show their store, even if
   // the underlying food record changed or was removed).
   const brand = food?.brandName ?? snapshot.brand ?? null;
-  const servingText = food
-    ? `${food.servingSizeValue} ${food.servingSizeUnit}`
-    : (snapshot.serving ?? null);
+  const servingText = food ? nativeServingLabel(food) : (snapshot.serving ?? null);
   const sourceLine =
     [brand, servingText].filter(Boolean).join(", ") ||
     (entry.customStoreOrderId ? "Custom build" : "Generic");

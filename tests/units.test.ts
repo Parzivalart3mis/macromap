@@ -19,6 +19,7 @@ function food(overrides: Partial<FoodDTO>): FoodDTO {
     sourceType: "user_created",
     servingSizeValue: 1,
     servingSizeUnit: "serving",
+    servingSizeLabel: null,
     alternateServings: [],
     calories: 100,
     proteinG: 10,

@@ -11,6 +11,7 @@ export interface FoodDTO {
   sourceType: "official_store" | "barcode_api" | "open_food_facts" | "user_created";
   servingSizeValue: number;
   servingSizeUnit: string;
+  servingSizeLabel: string | null;
   alternateServings: AlternateServing[];
   calories: number;
   proteinG: number;
