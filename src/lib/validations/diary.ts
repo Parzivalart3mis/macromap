@@ -53,6 +53,8 @@ export const buildSavedMealSchema = z.object({
       z.object({
         foodId: z.uuid(),
         quantity: z.number().positive(),
+        servingMultiplier: z.number().positive().default(1),
+        servingText: z.string().max(60).optional(),
       }),
     )
     .min(1)

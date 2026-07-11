@@ -16,12 +16,35 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/client/fetcher";
 import { roundNutrition, scaleNutrition, sumNutrition } from "@/lib/nutrition";
-import { dtoNutrition } from "@/lib/units";
+import {
+  baseServingAmount,
+  computeServing,
+  dtoNutrition,
+  formatNum,
+  servingOptions,
+  type UnitOption,
+} from "@/lib/units";
 import type { FoodDTO, SavedMealDTO } from "@/types/api";
 
+/**
+ * One meal line: N servings of a chosen serving option ("1.25 × large"), not a
+ * folded native multiple — so the picked unit survives display, edit, and save.
+ */
 interface BuilderItem {
   food: FoodDTO;
-  quantity: number;
+  option: UnitOption;
+  servings: number;
+}
+
+/** Stable identity for a line: same food in the same serving unit. */
+function itemKey(item: Pick<BuilderItem, "food" | "option">): string {
+  return `${item.food.id}:${Math.round(item.option.baseAmount * 1000) / 1000}`;
+}
+
+/** Multiple of the food's native serving this line represents. */
+function itemFactor(item: BuilderItem): number {
+  const base = baseServingAmount(item.food);
+  return item.servings * (base > 0 ? item.option.baseAmount / base : 1);
 }
 
 // The library tab to return to after saving (defaults to Meals).
@@ -56,7 +79,11 @@ function CreateMealView() {
       try {
         const { savedMeal } = await apiFetch<{
           savedMeal: Pick<SavedMealDTO, "name" | "directions"> & {
-            entriesSnapshotJson: { foodId?: string; quantity: number }[];
+            entriesSnapshotJson: {
+              foodId?: string;
+              quantity: number;
+              servingMultiplier?: number;
+            }[];
           };
         }>(`/api/saved-meals/${editId}`);
         const lines = savedMeal.entriesSnapshotJson.filter((l) => l.foodId);
@@ -71,7 +98,25 @@ function CreateMealView() {
         setName(savedMeal.name);
         setDirections(savedMeal.directions ?? "");
         const loaded = foods
-          .map((food, i) => (food ? { food, quantity: lines[i].quantity } : null))
+          .map((food, i) => {
+            if (!food) return null;
+            // Recover the serving option from the stored multiplier; if it no
+            // longer exists on the food (or the line predates units), fold the
+            // amount back into native servings.
+            const line = lines[i];
+            const multiplier = line.servingMultiplier ?? 1;
+            const base = baseServingAmount(food);
+            const option = servingOptions(food).find(
+              (o) => Math.abs(o.baseAmount - multiplier * base) <= base * 1e-6,
+            );
+            return option
+              ? { food, option, servings: line.quantity }
+              : {
+                  food,
+                  option: servingOptions(food)[0],
+                  servings: line.quantity * multiplier,
+                };
+          })
           .filter((x): x is BuilderItem => x !== null);
         setItems(loaded);
         // Items whose food no longer exists (or that never had one, e.g. old
@@ -89,34 +134,38 @@ function CreateMealView() {
   }, [editId]);
 
   const totals = roundNutrition(
-    sumNutrition(items.map((item) => scaleNutrition(dtoNutrition(item.food), item.quantity))),
+    sumNutrition(items.map((item) => scaleNutrition(dtoNutrition(item.food), itemFactor(item)))),
   );
 
-  function addFood(food: FoodDTO, quantity = 1) {
+  function addFood(food: FoodDTO, servings = 1, option?: UnitOption) {
+    const picked = option ?? servingOptions(food)[0];
+    const key = itemKey({ food, option: picked });
     setItems((prev) => {
-      const existing = prev.find((item) => item.food.id === food.id);
+      // Merge only into a line of the same food *and* unit; a different unit
+      // gets its own line (2 large + 100 g must not collapse).
+      const existing = prev.find((item) => itemKey(item) === key);
       if (existing) {
         return prev.map((item) =>
-          item.food.id === food.id ? { ...item, quantity: item.quantity + quantity } : item,
+          itemKey(item) === key ? { ...item, servings: item.servings + servings } : item,
         );
       }
-      return [...prev, { food, quantity }];
+      return [...prev, { food, option: picked, servings }];
     });
     toast.success(`Added ${food.name}`);
   }
 
-  function adjust(foodId: string, delta: number) {
+  function adjust(key: string, delta: number) {
     setItems((prev) =>
       prev.flatMap((item) => {
-        if (item.food.id !== foodId) return [item];
-        const quantity = Math.round((item.quantity + delta) * 4) / 4;
-        return quantity <= 0 ? [] : [{ ...item, quantity }];
+        if (itemKey(item) !== key) return [item];
+        const servings = Math.round((item.servings + delta) * 4) / 4;
+        return servings <= 0 ? [] : [{ ...item, servings }];
       }),
     );
   }
 
-  function removeItem(foodId: string) {
-    setItems((prev) => prev.filter((item) => item.food.id !== foodId));
+  function removeItem(key: string) {
+    setItems((prev) => prev.filter((item) => itemKey(item) !== key));
   }
 
   async function save() {
@@ -133,7 +182,14 @@ function CreateMealView() {
       const body = JSON.stringify({
         name: name.trim(),
         directions: directions.trim() || undefined,
-        items: items.map((item) => ({ foodId: item.food.id, quantity: item.quantity })),
+        items: items.map((item) => {
+          const { servingMultiplier, servingText } = computeServing(
+            item.food,
+            item.option,
+            item.servings,
+          );
+          return { foodId: item.food.id, quantity: item.servings, servingMultiplier, servingText };
+        }),
       });
       if (editId) {
         await apiFetch(`/api/saved-meals/${editId}`, { method: "PATCH", body });
@@ -265,8 +321,15 @@ function CreateMealView() {
             </button>
           ) : (
             <div className="space-y-2">
-              {items.map((item) => (
-                <SwipeableRow key={item.food.id} onDelete={() => removeItem(item.food.id)}>
+              {items.map((item) => {
+                const key = itemKey(item);
+                const { servingText, nutrition } = computeServing(
+                  item.food,
+                  item.option,
+                  item.servings,
+                );
+                return (
+                <SwipeableRow key={key} onDelete={() => removeItem(key)}>
                   <div className="flex items-center gap-2 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]">
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
@@ -276,8 +339,7 @@ function CreateMealView() {
                         {item.food.isVerified ? <VerifiedBadge /> : null}
                       </span>
                       <span className="text-[12px] text-muted-foreground">
-                        {Math.round(item.food.calories * item.quantity)} cal ·{" "}
-                        {item.food.servingSizeValue * item.quantity} {item.food.servingSizeUnit}
+                        {Math.round(nutrition.calories)} cal · {servingText}
                       </span>
                     </span>
                     <span className="stepper-controls flex items-center gap-1">
@@ -285,25 +347,26 @@ function CreateMealView() {
                         variant="outline"
                         size="icon-xs"
                         aria-label={`Less ${item.food.name}`}
-                        onClick={() => adjust(item.food.id, -0.25)}
+                        onClick={() => adjust(key, -0.25)}
                       >
                         <Minus aria-hidden />
                       </Button>
                       <span className="w-9 text-center text-sm tabular-nums">
-                        {item.quantity}
+                        {formatNum(item.servings)}
                       </span>
                       <Button
                         variant="outline"
                         size="icon-xs"
                         aria-label={`More ${item.food.name}`}
-                        onClick={() => adjust(item.food.id, 0.25)}
+                        onClick={() => adjust(key, 0.25)}
                       >
                         <Plus aria-hidden />
                       </Button>
                     </span>
                   </div>
                 </SwipeableRow>
-              ))}
+                );
+              })}
               <button
                 type="button"
                 onClick={() => setPickerOpen(true)}

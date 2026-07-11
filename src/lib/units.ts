@@ -75,6 +75,20 @@ export function nativeServingLabel(
   return food.servingSizeLabel ?? `${formatNum(food.servingSizeValue)} ${food.servingSizeUnit}`;
 }
 
+/**
+ * Serving text for N native servings of a food — the label at exactly 1
+ * serving ("1 medium (118 g)", "2 slices"), a pluralized amount otherwise
+ * ("4 cookies", "236 g").
+ */
+export function nativeServingTextFor(
+  food: Pick<FoodDTO, "servingSizeValue" | "servingSizeUnit" | "servingSizeLabel">,
+  servings: number,
+): string {
+  if (servings === 1) return nativeServingLabel(food);
+  const amount = servings * food.servingSizeValue;
+  return `${formatNum(amount)} ${pluralizeUnit(food.servingSizeUnit, amount)}`;
+}
+
 /** Recognises the food's serving unit; the first known token wins ("g (1 scoop)" → g). */
 function classifyUnit(rawUnit: string): { kind: UnitKind; canonical: string; factor: number } {
   const tokens = rawUnit.toLowerCase().match(/[a-z]+/g) ?? [];
@@ -179,6 +193,11 @@ export function computeServing(
   const quantity = servings;
   const factor = quantity * servingMultiplier;
   const nutrition = roundNutrition(scaleNutrition(dtoNutrition(food), factor));
-  const servingText = `${formatNum(servings * option.value)} ${option.unit}`;
+  // At exactly 1 serving the option's label is the truest description
+  // ("1 medium (118 g)", "16.9 fl oz", "1 serving (6 cookies)"); otherwise
+  // write the scaled amount with a pluralized count unit ("4 cookies").
+  const amount = servings * option.value;
+  const servingText =
+    servings === 1 ? option.label : `${formatNum(amount)} ${pluralizeUnit(option.unit, amount)}`;
   return { quantity, servingMultiplier, servingText, nutrition };
 }

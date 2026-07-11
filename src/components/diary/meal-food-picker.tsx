@@ -33,7 +33,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useVoiceLogging } from "@/hooks/useVoiceLogging";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
-import { computeServing, formatNum, servingOptions, type UnitOption } from "@/lib/units";
+import {
+  computeServing,
+  formatNum,
+  nativeServingLabel,
+  servingOptions,
+  type UnitOption,
+} from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type {
   ExternalFoodResultDTO,
@@ -45,7 +51,7 @@ type Mode = null | "barcode" | "voice" | "text";
 
 /** "Brand, serving size · N cal" for one serving of the food. */
 function foodSubtitle(food: FoodDTO): string {
-  const serving = `${food.servingSizeValue} ${food.servingSizeUnit}`;
+  const serving = nativeServingLabel(food);
   const base = food.brandName ? `${food.brandName}, ${serving}` : serving;
   return `${base} · ${Math.round(food.calories)} cal`;
 }
@@ -99,15 +105,16 @@ function AddRow({
 /**
  * Full-screen food picker for the Create-a-Meal builder. Mirrors the diary
  * Add Food screen (search, History / My Recipes / My Foods, barcode, voice,
- * describe) but every action calls `onAdd(food, quantity)` to append the food
- * to the meal in progress instead of logging it. Rendered as an overlay so the
- * builder's own state (name, items, directions) is never lost.
+ * describe) but every action calls `onAdd(food, servings, option)` to append
+ * the food to the meal in progress instead of logging it — the chosen serving
+ * unit is preserved (no option means the food's native serving). Rendered as an
+ * overlay so the builder's own state (name, items, directions) is never lost.
  */
 export function MealFoodPicker({
   onAdd,
   onClose,
 }: {
-  onAdd: (food: FoodDTO, quantity?: number) => void;
+  onAdd: (food: FoodDTO, servings?: number, option?: UnitOption) => void;
   onClose: () => void;
 }) {
   // Search
@@ -172,8 +179,8 @@ export function MealFoodPicker({
       .catch(() => setMyFoods([]));
   }, []);
 
-  function added(food: FoodDTO, quantity = 1) {
-    onAdd(food, quantity);
+  function added(food: FoodDTO, servings = 1, option?: UnitOption) {
+    onAdd(food, servings, option);
   }
 
   async function fetchResults(value: string) {
@@ -650,8 +657,8 @@ export function MealFoodPicker({
           food={detail.food}
           initialServings={detail.servings}
           onBack={closeTop}
-          onConfirm={(quantity) => {
-            added(detail.food, quantity);
+          onConfirm={(servings, option) => {
+            added(detail.food, servings, option);
             closeTop();
           }}
         />
@@ -673,7 +680,7 @@ function MealFoodDetail({
 }: {
   food: FoodDTO;
   initialServings?: number;
-  onConfirm: (quantity: number) => void;
+  onConfirm: (servings: number, option: UnitOption) => void;
   onBack: () => void;
 }) {
   const options = servingOptions(food);
@@ -684,10 +691,7 @@ function MealFoodDetail({
 
   const servingNum = Number(servings);
   const valid = Number.isFinite(servingNum) && servingNum > 0;
-  const { servingMultiplier, nutrition } = computeServing(food, option, valid ? servingNum : 0);
-  // Meal items store nutrition as native-serving multiples, so the added
-  // quantity is servings scaled by the unit's multiplier.
-  const quantity = valid ? servingNum * servingMultiplier : 0;
+  const { nutrition } = computeServing(food, option, valid ? servingNum : 0);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
@@ -703,7 +707,7 @@ function MealFoodDetail({
             aria-label="Add to meal"
             className="text-primary"
             disabled={!valid}
-            onClick={() => onConfirm(quantity)}
+            onClick={() => onConfirm(servingNum, option)}
           >
             <Check aria-hidden />
           </Button>
@@ -715,7 +719,7 @@ function MealFoodDetail({
           <h3 className="text-2xl font-extrabold tracking-tight">{food.name}</h3>
           <p className="text-sm text-muted-foreground">
             {food.brandName ? `${food.brandName}, ` : ""}
-            {food.servingSizeValue} {food.servingSizeUnit}
+            {nativeServingLabel(food)}
           </p>
           {food.description ? (
             <p className="mt-2 rounded-xl bg-muted/60 px-3 py-2 text-sm text-foreground/80">
@@ -814,7 +818,7 @@ function MealFoodDetail({
           ) : null}
         </div>
 
-        <Button className="w-full" disabled={!valid} onClick={() => onConfirm(quantity)}>
+        <Button className="w-full" disabled={!valid} onClick={() => onConfirm(servingNum, option)}>
           <Check data-icon="inline-start" aria-hidden />
           Add to meal
         </Button>

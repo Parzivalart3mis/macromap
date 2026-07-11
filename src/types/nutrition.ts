@@ -71,5 +71,8 @@ export interface SavedMealEntrySnapshot {
   customStoreOrderId?: string;
   quantity: number;
   servingMultiplier: number;
+  /** Human serving text as picked ("1 large (136 g)"); absent on legacy lines. */
+  serving?: string;
+  brand?: string;
   nutrition: NutritionSnapshot;
 }

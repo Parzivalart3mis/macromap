@@ -148,6 +148,7 @@ export function CustomBuilder({
             customStoreOrderId: order.id,
             quantity: 1,
             servingMultiplier: 1,
+            servingText: "1 order",
             eatenTime,
             loggedVia: "store_builder",
           }),

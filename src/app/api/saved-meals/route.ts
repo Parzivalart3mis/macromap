@@ -53,13 +53,15 @@ export async function POST(request: Request) {
     }
 
     const snapshot: SavedMealEntrySnapshot[] = entries.map((entry) => {
-      const { label, ...nutrition } = entry.nutritionSnapshotJson;
+      const { label, serving, brand, ...nutrition } = entry.nutritionSnapshotJson;
       return {
         label,
         foodId: entry.foodId ?? undefined,
         customStoreOrderId: entry.customStoreOrderId ?? undefined,
         quantity: entry.quantity,
         servingMultiplier: entry.servingMultiplier,
+        serving,
+        brand,
         nutrition,
       };
     });

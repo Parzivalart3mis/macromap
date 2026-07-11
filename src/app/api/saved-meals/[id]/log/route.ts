@@ -39,6 +39,16 @@ export async function POST(
     const meal = await getOrCreateMeal(day.id, input.mealName);
     const servings = input.servings ?? 1;
 
+    // Scale the leading amount of a "2 slices"-style serving text with the
+    // whole-meal multiplier (same rule the entry PATCH endpoint applies).
+    const scaleServingText = (text: string | undefined): string | undefined =>
+      servings === 1
+        ? text
+        : text?.replace(
+            /^\s*([\d.]+)/,
+            (_, num: string) => `${Math.round(Number(num) * servings * 100) / 100}`,
+          );
+
     await db.insert(diaryEntries).values(
       savedMeal.entriesSnapshotJson.map((line) => ({
         diaryMealId: meal.id,
@@ -51,6 +61,10 @@ export async function POST(
         nutritionSnapshotJson: {
           ...roundNutrition(scaleNutrition(line.nutrition, servings)),
           label: line.label,
+          serving: scaleServingText(
+            line.serving ?? (line.customStoreOrderId ? "1 order" : undefined),
+          ),
+          brand: line.brand,
         },
       })),
     );

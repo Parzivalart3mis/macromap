@@ -4,6 +4,7 @@ import {
   baseServingAmount,
   computeServing,
   formatNum,
+  nativeServingTextFor,
   servingOptions,
   unitKindOf,
 } from "@/lib/units";
@@ -157,5 +158,63 @@ describe("computeServing", () => {
     // 100 ml of a 236.588 ml cup = 100/236.588 of the serving.
     expect(result.nutrition.calories).toBeCloseTo((300 * 100) / 236.588, 1);
     expect(result.servingText).toBe("100 ml");
+  });
+
+  it("pluralizes count units in the serving text", () => {
+    const parle = food({ servingSizeValue: 1, servingSizeUnit: "cookie", calories: 21.7 });
+    const native = servingOptions(parle)[0];
+    expect(computeServing(parle, native, 4).servingText).toBe("4 cookies");
+    expect(computeServing(parle, native, 1).servingText).toBe("1 cookie");
+  });
+
+  it("uses the option's explicit label at exactly one serving", () => {
+    const soda = food({
+      servingSizeValue: 1,
+      servingSizeUnit: "can",
+      calories: 140,
+      alternateServings: [{ unit: "16.9 fl oz", multiplier: 1.4083, label: "16.9 fl oz" }],
+    });
+    const bottle = servingOptions(soda).find((o) => o.unit === "16.9 fl oz")!;
+    expect(computeServing(soda, bottle, 1).servingText).toBe("16.9 fl oz");
+    expect(computeServing(soda, bottle, 1).nutrition.calories).toBeCloseTo(140 * 1.4083, 0);
+  });
+
+  it("keeps a labelled alternate's nutrition = servings × multiplier", () => {
+    const banana = food({
+      servingSizeValue: 118,
+      servingSizeUnit: "g",
+      servingSizeLabel: "1 medium (118 g)",
+      calories: 105,
+      alternateServings: [{ unit: "large", multiplier: 136 / 118, label: "1 large (136 g)" }],
+    });
+    const opts = servingOptions(banana);
+    expect(opts[0].label).toBe("1 medium (118 g)");
+    const large = opts.find((o) => o.unit === "large")!;
+    const one = computeServing(banana, large, 1);
+    expect(one.servingText).toBe("1 large (136 g)");
+    expect(one.servingMultiplier).toBeCloseTo(136 / 118, 5);
+    expect(one.nutrition.calories).toBeCloseTo(105 * (136 / 118), 0);
+    // The logged pair (quantity, multiplier) must reproduce the same factor.
+    expect(one.quantity * one.servingMultiplier).toBeCloseTo(136 / 118, 5);
+  });
+});
+
+describe("nativeServingTextFor", () => {
+  it("uses the native label at one serving and pluralized amounts otherwise", () => {
+    const banana = food({
+      servingSizeValue: 118,
+      servingSizeUnit: "g",
+      servingSizeLabel: "1 medium (118 g)",
+    });
+    expect(nativeServingTextFor(banana, 1)).toBe("1 medium (118 g)");
+    expect(nativeServingTextFor(banana, 2)).toBe("236 g");
+
+    const egg = food({ servingSizeValue: 1, servingSizeUnit: "egg" });
+    expect(nativeServingTextFor(egg, 3)).toBe("3 eggs");
+    expect(nativeServingTextFor(egg, 1)).toBe("1 egg");
+
+    const bread = food({ servingSizeValue: 2, servingSizeUnit: "slices" });
+    expect(nativeServingTextFor(bread, 1)).toBe("2 slices");
+    expect(nativeServingTextFor(bread, 2)).toBe("4 slices");
   });
 });
