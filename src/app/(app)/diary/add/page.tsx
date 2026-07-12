@@ -12,6 +12,7 @@ import {
   ScanBarcode,
   Search,
   Type,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -760,8 +761,18 @@ function AddFoodView() {
             value={query}
             onChange={(event) => runSearch(event.target.value)}
             autoComplete="off"
-            className="h-12 rounded-full pl-10"
+            className="h-12 rounded-full pl-10 pr-10 [&::-webkit-search-cancel-button]:hidden"
           />
+          {query ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => runSearch("")}
+              className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          ) : null}
         </form>
 
         {/* Natural-language review takes over when present */}

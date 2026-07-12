@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, Pencil, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Pencil, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -285,8 +285,18 @@ function StoreView({ slug }: { slug: string }) {
               value={menuQuery}
               onChange={(event) => setMenuQuery(event.target.value)}
               autoComplete="off"
-              className="h-11 rounded-full pl-10"
+              className="h-11 rounded-full pl-10 pr-10"
             />
+            {menuQuery ? (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setMenuQuery("")}
+                className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            ) : null}
           </div>
 
           {!searching && info.categories.length > 1 ? (

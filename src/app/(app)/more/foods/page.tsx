@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -129,9 +129,19 @@ function MyMealsRecipesFoodsView() {
             placeholder="Search for a food"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            className="h-11 rounded-full pl-10"
+            className="h-11 rounded-full pl-10 pr-10"
             autoComplete="off"
           />
+          {query ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setQuery("")}
+              className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          ) : null}
         </div>
 
         <Tabs value={tab} onValueChange={changeTab}>
