@@ -80,10 +80,16 @@ function foodSubtitle(food: FoodDTO, quantity = 1): string {
   return `${base}${qty} · ${Math.round(food.calories * quantity)} cal`;
 }
 
-/** History line: the serving exactly as last logged ("1 large (136 g) · 121 cal"). */
+/**
+ * History line: the serving exactly as last logged, without the size
+ * parenthetical — "1 large · 121 cal", not "1 large (136 g)" or "118 g".
+ */
 function recentSubtitle({ food, lastQuantity, lastMultiplier, lastServing }: RecentItem): string {
   const factor = lastQuantity * lastMultiplier;
-  const serving = lastServing ?? nativeServingTextFor(food, factor);
+  const serving = (lastServing ?? nativeServingTextFor(food, factor)).replace(
+    /\s*\([^)]*\)\s*$/,
+    "",
+  );
   const base = food.brandName ? `${food.brandName}, ${serving}` : serving;
   return `${base} · ${Math.round(food.calories * factor)} cal`;
 }
