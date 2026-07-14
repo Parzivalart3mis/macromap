@@ -35,7 +35,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useVoiceLogging } from "@/hooks/useVoiceLogging";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
-import { nativeServingTextFor } from "@/lib/units";
+import { nativeServingLabel, nativeServingTextFor } from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type {
   ExternalFoodResultDTO,
@@ -74,7 +74,7 @@ function currentTimeIfToday(date: string): string | undefined {
 
 /** Standard food line: "Brand, serving size" (+ last quantity and calories). */
 function foodSubtitle(food: FoodDTO, quantity = 1): string {
-  const serving = `${food.servingSizeValue} ${food.servingSizeUnit}`;
+  const serving = nativeServingLabel(food);
   const base = food.brandName ? `${food.brandName}, ${serving}` : serving;
   const qty = quantity !== 1 ? ` × ${quantity}` : "";
   return `${base}${qty} · ${Math.round(food.calories * quantity)} cal`;

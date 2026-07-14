@@ -26,6 +26,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
+import { nativeServingLabel } from "@/lib/units";
 import { defaultMealForNow, storeThemeStyle } from "@/lib/store-theme";
 import { cn } from "@/lib/utils";
 import type {
@@ -339,7 +340,7 @@ function StoreView({ slug }: { slug: string }) {
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
                         {item.food.brandName ? `${item.food.brandName}, ` : ""}
-                        {item.food.servingSizeValue} {item.food.servingSizeUnit}
+                        {nativeServingLabel(item.food)}
                       </span>
                       {item.food.description ? (
                         <span className="block truncate text-xs text-muted-foreground/80 italic">

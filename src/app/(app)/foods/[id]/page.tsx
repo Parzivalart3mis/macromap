@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/client/fetcher";
+import { nativeServingLabel } from "@/lib/units";
 import type { FoodDTO } from "@/types/api";
 
 interface HistoryRow {
@@ -309,7 +310,7 @@ export default function FoodDetailPage({
             </div>
             <p className="text-sm text-muted-foreground">
               {food.brandName ? `${food.brandName}, ` : ""}
-              {food.servingSizeValue} {food.servingSizeUnit}
+              {nativeServingLabel(food)}
               {food.barcode ? ` · barcode ${food.barcode}` : ""}
             </p>
             {food.description ? (

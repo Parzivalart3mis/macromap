@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/client/fetcher";
+import { nativeServingLabel } from "@/lib/units";
 import type { FoodDTO, SavedMealDTO } from "@/types/api";
 
 /** Standard food line: "Brand, serving size". */
 function foodLine(food: FoodDTO): string {
-  const serving = `${food.servingSizeValue} ${food.servingSizeUnit}`;
+  const serving = nativeServingLabel(food);
   return food.brandName ? `${food.brandName}, ${serving}` : serving;
 }
 

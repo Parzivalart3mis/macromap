@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
-import { nativeServingLabel } from "@/lib/units";
+import { nativeServingLabel, scaleServingText } from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type { DiaryEntryDTO, FoodDTO, GoalDTO } from "@/types/api";
 import { NUTRITION_KEYS, type NutritionSnapshot } from "@/types/nutrition";
@@ -95,11 +95,18 @@ export function EntryEditDialog({
     valid ? quantity / entry.quantity : 0,
   );
 
-  // Prefer the live food's brand/serving; fall back to the values captured on
-  // the entry (so store items and custom builds still show their store, even if
-  // the underlying food record changed or was removed).
+  // The entry's own serving text ("1 large (136 g)") is the truth about what
+  // was logged; the live food's native serving is only a fallback for old
+  // entries that never captured one. The stored text is the TOTAL amount, so
+  // divide by the quantity to show the per-unit size next to the servings
+  // count ("4 slices" over 2 servings reads "2 slices"). Brand prefers the
+  // live food (renames).
   const brand = food?.brandName ?? snapshot.brand ?? null;
-  const servingText = food ? nativeServingLabel(food) : (snapshot.serving ?? null);
+  const servingText = snapshot.serving
+    ? scaleServingText(snapshot.serving, 1 / entry.quantity)
+    : food
+      ? nativeServingLabel(food)
+      : null;
   const sourceLine =
     [brand, servingText].filter(Boolean).join(", ") ||
     (entry.customStoreOrderId ? "Custom build" : "Generic");
@@ -191,11 +198,11 @@ export function EntryEditDialog({
 
         {/* Fields */}
         <div className="divide-y rounded-xl border bg-card text-sm">
-          {food ? (
+          {servingText ? (
             <div className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="font-medium">Serving Size</span>
               <span className="rounded-lg border px-3 py-1.5 font-semibold text-primary">
-                {food.servingSizeValue} {food.servingSizeUnit}
+                {servingText}
               </span>
             </div>
           ) : null}
