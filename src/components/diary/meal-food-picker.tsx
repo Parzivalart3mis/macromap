@@ -35,6 +35,7 @@ import { useVoiceLogging } from "@/hooks/useVoiceLogging";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
 import {
+  baseServingAmount,
   computeServing,
   formatNum,
   nativeServingLabel,
@@ -128,12 +129,19 @@ export function MealFoodPicker({
   const [submitted, setSubmitted] = useState(false);
 
   // Tabs data (My Foods = created non-recipes, My Recipes = created recipes)
-  const [recent, setRecent] = useState<{ food: FoodDTO; lastQuantity: number }[] | null>(null);
+  const [recent, setRecent] = useState<
+    | { food: FoodDTO; lastQuantity: number; lastMultiplier: number; lastServing: string | null }[]
+    | null
+  >(null);
   const [myFoods, setMyFoods] = useState<FoodDTO[] | null>(null);
 
   // A tapped food opens the serving-size detail step (pre-filled with the
   // servings to start from) before it is added.
-  const [detail, setDetail] = useState<{ food: FoodDTO; servings: number } | null>(null);
+  const [detail, setDetail] = useState<{
+    food: FoodDTO;
+    servings: number;
+    option?: UnitOption;
+  } | null>(null);
 
   // Back gesture / button closes the top overlay layer (detail → list → picker)
   // instead of leaving the builder route and losing the in-progress meal.
@@ -153,12 +161,31 @@ export function MealFoodPicker({
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  function openDetail(food: FoodDTO, servings = 1) {
+  function openDetail(food: FoodDTO, servings = 1, option?: UnitOption) {
     window.history.pushState({ mmMealDetail: true }, "");
-    setDetail({ food, servings });
+    setDetail({ food, servings, option });
   }
   // Pops the pushed history entry; the popstate handler updates state.
   const closeTop = () => window.history.back();
+
+  /**
+   * Reconstruct a History item's last serving: its unit option when it still
+   * exists, otherwise fold the multiplier into native servings so the amount
+   * stays right.
+   */
+  function lastServingChoice(
+    food: FoodDTO,
+    lastQuantity: number,
+    lastMultiplier: number,
+  ): { servings: number; option?: UnitOption } {
+    const base = baseServingAmount(food);
+    const option = servingOptions(food).find(
+      (o) => Math.abs(o.baseAmount - lastMultiplier * base) <= base * 1e-6,
+    );
+    return option
+      ? { servings: lastQuantity, option }
+      : { servings: lastQuantity * lastMultiplier, option: undefined };
+  }
 
   // Modes
   const [mode, setMode] = useState<Mode>(null);
@@ -172,7 +199,14 @@ export function MealFoodPicker({
   const [review, setReview] = useState<NaturalLogSuggestionDTO[] | null>(null);
 
   useEffect(() => {
-    apiFetch<{ recent: { food: FoodDTO; lastQuantity: number }[] }>("/api/diary/recent")
+    apiFetch<{
+      recent: {
+        food: FoodDTO;
+        lastQuantity: number;
+        lastMultiplier: number;
+        lastServing: string | null;
+      }[];
+    }>("/api/diary/recent")
       .then((data) => setRecent(data.recent))
       .catch(() => setRecent([]));
     apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine")
@@ -595,15 +629,21 @@ export function MealFoodPicker({
                 />
               ) : (
                 <div className="stagger-children space-y-2">
-                  {recentFiltered.map(({ food, lastQuantity }) => (
+                  {recentFiltered.map(({ food, lastQuantity, lastMultiplier }) => (
                     <AddRow
                       key={food.id}
                       title={food.name}
                       subtitle={foodSubtitle(food)}
                       description={food.description}
                       verified={food.isVerified}
-                      onOpen={() => openDetail(food, lastQuantity)}
-                      onAdd={() => added(food, lastQuantity)}
+                      onOpen={() => {
+                        const last = lastServingChoice(food, lastQuantity, lastMultiplier);
+                        openDetail(food, last.servings, last.option);
+                      }}
+                      onAdd={() => {
+                        const last = lastServingChoice(food, lastQuantity, lastMultiplier);
+                        added(food, last.servings, last.option);
+                      }}
                     />
                   ))}
                 </div>
@@ -667,6 +707,7 @@ export function MealFoodPicker({
         <MealFoodDetail
           food={detail.food}
           initialServings={detail.servings}
+          initialOption={detail.option}
           onBack={closeTop}
           onConfirm={(servings, option) => {
             added(detail.food, servings, option);
@@ -686,16 +727,19 @@ export function MealFoodPicker({
 function MealFoodDetail({
   food,
   initialServings = 1,
+  initialOption,
   onConfirm,
   onBack,
 }: {
   food: FoodDTO;
   initialServings?: number;
+  /** Pre-selected unit (History restores the last-used one). */
+  initialOption?: UnitOption;
   onConfirm: (servings: number, option: UnitOption) => void;
   onBack: () => void;
 }) {
   const options = servingOptions(food);
-  const [option, setOption] = useState<UnitOption>(options[0]);
+  const [option, setOption] = useState<UnitOption>(initialOption ?? options[0]);
   const [servings, setServings] = useState(() => formatNum(initialServings));
   const [unitSheetOpen, setUnitSheetOpen] = useState(false);
   const [factsOpen, setFactsOpen] = useState(false);

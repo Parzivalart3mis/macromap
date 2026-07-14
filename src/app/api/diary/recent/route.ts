@@ -24,10 +24,13 @@ export async function GET(request: NextRequest) {
     const rows = await db
       .select({
         food: foods,
-        // Effective amount in native servings: quantity is "servings of the
-        // chosen unit", so fold in the unit's multiplier (e.g. 2 × "100 ml" of
-        // a 1-cup food is ~0.85 native servings, not 2).
-        lastQuantity: sql<number>`(round(((array_agg(${diaryEntries.quantity} * ${diaryEntries.servingMultiplier} order by ${diaryEntries.createdAt} desc))[1])::numeric, 2))::float8`,
+        // The last log's exact serving choice — quantity in the chosen unit,
+        // that unit's multiplier, and its display text ("1 large (136 g)") —
+        // so re-logging from History reproduces it verbatim instead of
+        // folding back to native servings.
+        lastQuantity: sql<number>`(round(((array_agg(${diaryEntries.quantity} order by ${diaryEntries.createdAt} desc))[1])::numeric, 2))::float8`,
+        lastMultiplier: sql<number>`((array_agg(${diaryEntries.servingMultiplier} order by ${diaryEntries.createdAt} desc))[1])::float8`,
+        lastServing: sql<string | null>`(array_agg(${diaryEntries.nutritionSnapshotJson}->>'serving' order by ${diaryEntries.createdAt} desc))[1]`,
         lastLoggedAt: sql<string>`max(${diaryEntries.createdAt})`,
         mealCount,
       })
@@ -41,7 +44,12 @@ export async function GET(request: NextRequest) {
       .limit(20);
 
     return NextResponse.json({
-      recent: rows.map((row) => ({ food: row.food, lastQuantity: row.lastQuantity })),
+      recent: rows.map((row) => ({
+        food: row.food,
+        lastQuantity: row.lastQuantity,
+        lastMultiplier: row.lastMultiplier,
+        lastServing: row.lastServing,
+      })),
     });
   } catch (error) {
     return handleApiError(error);

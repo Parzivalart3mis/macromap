@@ -53,7 +53,12 @@ type LoggedVia = "search" | "barcode" | "voice" | "natural_language";
 
 interface RecentItem {
   food: FoodDTO;
+  /** Servings of the last-used unit (not folded into native servings). */
   lastQuantity: number;
+  /** That unit's multiplier vs the native serving. */
+  lastMultiplier: number;
+  /** Display text of the last serving ("1 large (136 g)"); null on old rows. */
+  lastServing: string | null;
 }
 
 /**
@@ -73,6 +78,14 @@ function foodSubtitle(food: FoodDTO, quantity = 1): string {
   const base = food.brandName ? `${food.brandName}, ${serving}` : serving;
   const qty = quantity !== 1 ? ` × ${quantity}` : "";
   return `${base}${qty} · ${Math.round(food.calories * quantity)} cal`;
+}
+
+/** History line: the serving exactly as last logged ("1 large (136 g) · 121 cal"). */
+function recentSubtitle({ food, lastQuantity, lastMultiplier, lastServing }: RecentItem): string {
+  const factor = lastQuantity * lastMultiplier;
+  const serving = lastServing ?? nativeServingTextFor(food, factor);
+  const base = food.brandName ? `${food.brandName}, ${serving}` : serving;
+  return `${base} · ${Math.round(food.calories * factor)} cal`;
 }
 
 /** MFP-style row: tap the body for the serving picker, tap + to log instantly. */
@@ -292,10 +305,12 @@ function AddFoodView() {
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
 
   // Tapping a food opens the full-page log screen (with the unit selector).
-  // `servings` pre-fills the count (used by History to restore the last amount).
-  function openLog(id: string, via: LoggedVia, servings?: number) {
+  // `servings` pre-fills the count and `mult` restores the last-used unit
+  // (used by History so "1 large" reopens as 1 large, not 1.15 native).
+  function openLog(id: string, via: LoggedVia, servings?: number, mult?: number) {
     const p = new URLSearchParams({ foodId: id, date, meal: mealName, via });
     if (servings && servings > 0) p.set("servings", String(servings));
+    if (mult && mult > 0 && mult !== 1) p.set("mult", String(mult));
     router.push(`/diary/log?${p.toString()}`);
   }
 
@@ -435,10 +450,35 @@ function AddFoodView() {
     toast.success(`Logged to ${mealName}`);
   }
 
-  async function quickLog(food: FoodDTO, quantity: number) {
+  /**
+   * "+" on a food row. A plain food logs one native serving; a History item
+   * re-logs the last serving verbatim (same unit, count, and text).
+   */
+  async function quickLog(item: FoodDTO | RecentItem, quantity = 1) {
+    const isRecent = "lastQuantity" in item;
+    const food = isRecent ? item.food : item;
     setQuickBusy(food.id);
     try {
-      await logFood(food, quantity, "search");
+      if (isRecent) {
+        await apiFetch("/api/diary/entries", {
+          method: "POST",
+          body: JSON.stringify({
+            date,
+            mealName,
+            foodId: food.id,
+            quantity: item.lastQuantity,
+            servingMultiplier: item.lastMultiplier,
+            servingText:
+              item.lastServing ??
+              nativeServingTextFor(food, item.lastQuantity * item.lastMultiplier),
+            eatenTime: currentTimeIfToday(date),
+            loggedVia: "search",
+          }),
+        });
+        toast.success(`Logged to ${mealName}`);
+      } else {
+        await logFood(food, quantity, "search");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Logging failed");
     } finally {
@@ -914,16 +954,18 @@ function AddFoodView() {
                     />
                   ) : (
                     <div className="stagger-children space-y-2">
-                      {recentFiltered.map(({ food, lastQuantity }) => (
+                      {recentFiltered.map((item) => (
                         <QuickRow
-                          key={food.id}
-                          title={food.name}
-                          subtitle={foodSubtitle(food, lastQuantity)}
-                          description={food.description}
-                          verified={food.isVerified}
-                          busy={quickBusy === food.id}
-                          onOpen={() => openLog(food.id, "search", lastQuantity)}
-                          onQuickLog={() => quickLog(food, lastQuantity)}
+                          key={item.food.id}
+                          title={item.food.name}
+                          subtitle={recentSubtitle(item)}
+                          description={item.food.description}
+                          verified={item.food.isVerified}
+                          busy={quickBusy === item.food.id}
+                          onOpen={() =>
+                            openLog(item.food.id, "search", item.lastQuantity, item.lastMultiplier)
+                          }
+                          onQuickLog={() => quickLog(item)}
                         />
                       ))}
                     </div>

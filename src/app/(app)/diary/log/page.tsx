@@ -27,6 +27,7 @@ import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import {
+  baseServingAmount,
   computeServing,
   formatNum,
   nativeServingLabel,
@@ -59,11 +60,16 @@ function LogFoodView() {
     const m = params.get("meal");
     return m && m.length <= 40 ? m : "Snacks";
   });
-  // Opening from History pre-fills the last-used serving count.
+  // Opening from History pre-fills the last-used serving count, and `mult`
+  // restores the last-used unit (so "1 large" reopens as 1 large).
   const [servings, setServings] = useState(() => {
     const n = Number(params.get("servings"));
     return Number.isFinite(n) && n > 0 ? formatNum(n) : "1";
   });
+  const initialMult = (() => {
+    const n = Number(params.get("mult"));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
   const [option, setOption] = useState<UnitOption | null>(null);
   const [unitSheetOpen, setUnitSheetOpen] = useState(false);
   const [factsOpen, setFactsOpen] = useState(false);
@@ -86,7 +92,21 @@ function LogFoodView() {
       .then((data) => {
         if (cancelled) return;
         setFood(data.food);
-        setOption(servingOptions(data.food)[0] ?? null);
+        // Restore the last-used unit when History passed its multiplier; if
+        // that unit no longer exists, fall back to the native serving and
+        // fold the multiplier into the count so the amount stays right.
+        const options = servingOptions(data.food);
+        const base = baseServingAmount(data.food);
+        const match = initialMult
+          ? options.find((o) => Math.abs(o.baseAmount - initialMult * base) <= base * 1e-6)
+          : undefined;
+        setOption(match ?? options[0] ?? null);
+        if (initialMult && !match) {
+          setServings((prev) => {
+            const n = Number(prev);
+            return Number.isFinite(n) && n > 0 ? formatNum(n * initialMult) : prev;
+          });
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Could not load food");
@@ -99,7 +119,7 @@ function LogFoodView() {
     return () => {
       cancelled = true;
     };
-  }, [foodId, date]);
+  }, [foodId, date, initialMult]);
 
   if (error) {
     return (
