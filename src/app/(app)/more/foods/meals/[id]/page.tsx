@@ -36,6 +36,11 @@ function AddMealView() {
     return d && DATE_RE.test(d) ? d : todayISO();
   })();
 
+  // A `meal` param means we arrived from a logging flow (the diary's Add Food
+  // screen), which also decides where Log returns to; the library entry point
+  // passes no context and defaults to Breakfast.
+  const fromLogFlow = Boolean(search.get("meal"));
+
   const [meal, setMeal] = useState<SavedMealDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [goal, setGoal] = useState<GoalDTO | null>(null);
@@ -110,8 +115,13 @@ function AddMealView() {
         }),
       });
       toast.success(`Logged ${meal!.name} to ${mealName}`);
-      // Replace so back from the diary skips this completed form.
-      router.replace(date === todayISO() ? "/diary" : `/diary?date=${date}`);
+      if (fromLogFlow) {
+        // Came from the Add Food screen — go back to it to keep logging.
+        router.back();
+      } else {
+        // Opened from the library: replace so back skips this completed form.
+        router.replace(date === todayISO() ? "/diary" : `/diary?date=${date}`);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Logging failed");
       setBusy(false);

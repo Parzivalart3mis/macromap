@@ -554,6 +554,16 @@ function AddFoodView() {
     }
   }
 
+  /**
+   * Tapping a saved meal opens the full "Add Meal" screen (items, servings,
+   * meal, time) carrying this flow's date + meal slot — the "+" stays the
+   * one-tap path that logs a single serving straight away.
+   */
+  function openSavedMeal(savedMeal: SavedMealDTO) {
+    const p = new URLSearchParams({ date, meal: mealName });
+    router.push(`/more/foods/meals/${savedMeal.id}?${p.toString()}`);
+  }
+
   async function logSavedMeal(savedMeal: SavedMealDTO) {
     setQuickBusy(savedMeal.id);
     try {
@@ -999,6 +1009,7 @@ function AddFoodView() {
                             ),
                           )} cal`}
                           busy={quickBusy === savedMeal.id}
+                          onOpen={() => openSavedMeal(savedMeal)}
                           onQuickLog={() => logSavedMeal(savedMeal)}
                         />
                       ))}
