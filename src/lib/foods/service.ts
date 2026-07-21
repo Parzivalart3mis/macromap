@@ -77,7 +77,9 @@ export async function searchFoods(
         join ${diaryDays} on ${diaryDays.id} = ${diaryMeals.diaryDayId}
         where ${diaryEntries.foodId} = ${foods.id} and ${diaryDays.userId} = ${userId}
       ) then 1 else 0 end`
-    : sql<number>`0`;
+    // Cast so Postgres reads this as a constant expression; a bare `0` in
+    // ORDER BY is parsed as an (invalid) ordinal column position.
+    : sql<number>`0::int`;
   const rows = await db
     .select()
     .from(foods)
