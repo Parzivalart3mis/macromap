@@ -76,6 +76,7 @@ describe("ruleBasedInsights", () => {
             carbsG: 0,
             fatG: 0,
           },
+          verified: false,
           createdAt: new Date(),
         },
       ],

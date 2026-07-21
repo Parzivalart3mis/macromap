@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
 import { EntryEditDialog } from "@/components/diary/entry-edit-dialog";
+import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { MacroRing, macroPctOfCalories } from "@/components/nutrition/macro-ring";
 import { SwipeableRow } from "@/components/diary/swipeable-row";
 import { Button } from "@/components/ui/button";
@@ -408,8 +409,11 @@ function MealDetail() {
                       className="diary-row flex w-full items-center gap-3 rounded-2xl border bg-card p-4 text-left shadow-[var(--shadow-soft)]"
                     >
                       <span className="diary-entry-text min-w-0 flex-1">
-                        <span className="block truncate text-[14px] font-semibold">
-                          {entry.nutritionSnapshotJson.label}
+                        <span className="flex items-center gap-1.5">
+                          <span className="truncate text-[14px] font-semibold">
+                            {entry.nutritionSnapshotJson.label}
+                          </span>
+                          {entry.verified ? <VerifiedBadge /> : null}
                         </span>
                         <span className="text-[12px] text-muted-foreground">
                           {entry.eatenTime ? `${formatClock(entry.eatenTime)} · ` : ""}

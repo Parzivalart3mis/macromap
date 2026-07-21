@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { DailyGoalBars } from "@/components/nutrition/goal-bars";
 import { MacroRing, macroPctOfCalories } from "@/components/nutrition/macro-ring";
 import { NutritionPanel } from "@/components/nutrition/nutrition-panel";
@@ -185,8 +186,9 @@ export function EntryEditDialog({
           </Button>
         </div>
         <DialogHeader className="space-y-0">
-          <DialogTitle className="diary-entry-text text-lg leading-snug">
-            {label}
+          <DialogTitle className="diary-entry-text flex items-center gap-1.5 text-lg leading-snug">
+            <span className="min-w-0">{label}</span>
+            {(food?.isVerified ?? entry.verified) ? <VerifiedBadge /> : null}
           </DialogTitle>
           <DialogDescription>{sourceLine}</DialogDescription>
           {food?.description ? (

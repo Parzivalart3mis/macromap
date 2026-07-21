@@ -49,6 +49,8 @@ export interface DiaryEntryDTO {
   loggedVia: string;
   eatenTime: string | null;
   nutritionSnapshotJson: NutritionSnapshot & { label: string; serving?: string; brand?: string };
+  /** Whether the underlying food currently carries the verified badge. */
+  verified: boolean;
   createdAt: string;
 }
 

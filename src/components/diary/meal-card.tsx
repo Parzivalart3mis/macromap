@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 
+import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -92,11 +93,14 @@ export function MealCard({ meal, date }: { meal: DiaryMealDTO; date: string }) {
             </span>
           ) : (
             <>
-              <span className="diary-entry-text block truncate text-sm font-medium">
-                {first.nutritionSnapshotJson.label}
-                {meal.entries.length > 1
-                  ? ` and ${meal.entries.length - 1} more`
-                  : ""}
+              <span className="diary-entry-text flex items-center gap-1.5">
+                <span className="truncate text-sm font-medium">
+                  {first.nutritionSnapshotJson.label}
+                  {meal.entries.length > 1
+                    ? ` and ${meal.entries.length - 1} more`
+                    : ""}
+                </span>
+                {first.verified ? <VerifiedBadge /> : null}
               </span>
               <span className="text-sm tabular-nums text-muted-foreground">
                 {Math.round(meal.totals.calories)} cal

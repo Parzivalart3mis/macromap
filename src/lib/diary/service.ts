@@ -142,9 +142,12 @@ export function buildEntrySnapshot(
   throw new ApiError("invalid_request", "Entry source missing", 400);
 }
 
+/** A logged entry plus whether its food currently carries the verified badge. */
+export type DiaryEntryWithVerified = DiaryEntry & { verified: boolean };
+
 export interface DiaryPayload {
   date: string;
-  meals: Array<DiaryMeal & { entries: DiaryEntry[]; totals: NutritionSnapshot }>;
+  meals: Array<DiaryMeal & { entries: DiaryEntryWithVerified[]; totals: NutritionSnapshot }>;
   totals: NutritionSnapshot;
   goal: {
     calories: number;
@@ -168,14 +171,15 @@ export async function getDiaryPayload(
     .where(and(eq(diaryDays.userId, userId), eq(diaryDays.date, date)))
     .limit(1);
 
-  let meals: Array<DiaryMeal & { entries: DiaryEntry[]; totals: NutritionSnapshot }> = [];
+  let meals: Array<DiaryMeal & { entries: DiaryEntryWithVerified[]; totals: NutritionSnapshot }> =
+    [];
   if (day) {
     const mealRows = await db
       .select()
       .from(diaryMeals)
       .where(eq(diaryMeals.diaryDayId, day.id))
       .orderBy(asc(diaryMeals.displayOrder), asc(diaryMeals.mealName));
-    const entryRows = mealRows.length
+    const rawEntries = mealRows.length
       ? await db
           .select()
           .from(diaryEntries)
@@ -187,6 +191,28 @@ export async function getDiaryPayload(
           )
           .orderBy(asc(diaryEntries.createdAt))
       : [];
+
+    // Verification is read live from the food (one lookup for the whole day),
+    // not frozen into the snapshot — so a food promoted to official later
+    // shows its badge on entries that were logged before the promotion.
+    const foodIds = [...new Set(rawEntries.map((e) => e.foodId).filter((id): id is string => !!id))];
+    const verifiedIds = new Set(
+      foodIds.length
+        ? (
+            await db
+              .select({ id: foods.id, isVerified: foods.isVerified })
+              .from(foods)
+              .where(inArray(foods.id, foodIds))
+          )
+            .filter((f) => f.isVerified)
+            .map((f) => f.id)
+        : [],
+    );
+    const entryRows: DiaryEntryWithVerified[] = rawEntries.map((entry) => ({
+      ...entry,
+      verified: entry.foodId ? verifiedIds.has(entry.foodId) : false,
+    }));
+
     meals = mealRows.map((meal) => {
       const entries = entryRows.filter((entry) => entry.diaryMealId === meal.id);
       return {

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
+import { todayISO } from "@/lib/dates";
 import type { GoalProfileDTO } from "@/types/api";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -257,7 +258,11 @@ export function GoalsManager() {
   async function activate(profile: GoalProfileDTO) {
     setBusyId(profile.id);
     try {
-      await apiFetch(`/api/goals/${profile.id}/activate`, { method: "POST" });
+      await apiFetch(`/api/goals/${profile.id}/activate`, {
+        method: "POST",
+        // Local date so today (and any future days) adopt the new targets.
+        body: JSON.stringify({ today: todayISO() }),
+      });
       toast.success(`${profile.name} is now active`);
       load();
     } catch (error) {
