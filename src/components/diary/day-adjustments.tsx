@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
 import { cn } from "@/lib/utils";
-import type { DayActivityDTO, DayOneOffDTO } from "@/types/api";
+import type { DayActivityDTO, DayOneOffDTO, GoalActivityDTO, GoalProfileDTO } from "@/types/api";
 
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -34,7 +34,22 @@ export function DayAdjustments({
   // Inline override editor: which activity, and the draft carb value.
   const [editing, setEditing] = useState<{ id: string; carbs: string } | null>(null);
   const [oneOffDraft, setOneOffDraft] = useState<{ label: string; carbs: string } | null>(null);
+  // The profile's whole activity list, lazily loaded to quick-fill one-offs
+  // (add a preset like "E-bike commute" on a day it doesn't normally recur).
+  const [presets, setPresets] = useState<GoalActivityDTO[] | null>(null);
   const weekdayName = WEEKDAY_NAMES[new Date(`${date}T00:00:00Z`).getUTCDay()];
+
+  async function openOneOff() {
+    setOneOffDraft({ label: "", carbs: "" });
+    if (presets === null) {
+      try {
+        const { goalProfiles } = await apiFetch<{ goalProfiles: GoalProfileDTO[] }>("/api/goals");
+        setPresets(goalProfiles.find((p) => p.id === profileId)?.activities ?? []);
+      } catch {
+        setPresets([]);
+      }
+    }
+  }
 
   async function run(fn: () => Promise<unknown>, failMsg: string) {
     setBusy(true);
@@ -209,6 +224,25 @@ export function DayAdjustments({
 
       {oneOffDraft ? (
         <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
+          {presets && presets.length > 0 ? (
+            <div>
+              <span className="mb-1 block text-xs text-muted-foreground">
+                Quick pick from your activities
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {presets.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setOneOffDraft({ label: p.name, carbs: String(p.deltaCarbsG) })}
+                    className="rounded-full border bg-card px-3 py-1 text-xs hover:bg-muted"
+                  >
+                    {p.name} +{p.deltaCarbsG}c
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <Input
             placeholder="One-off name (e.g. Extra ride)"
             value={oneOffDraft.label}
@@ -243,12 +277,7 @@ export function DayAdjustments({
           </div>
         </div>
       ) : (
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full"
-          onClick={() => setOneOffDraft({ label: "", carbs: "" })}
-        >
+        <Button size="sm" variant="outline" className="w-full" onClick={openOneOff}>
           <Plus data-icon="inline-start" aria-hidden />
           One-off adjustment
         </Button>
