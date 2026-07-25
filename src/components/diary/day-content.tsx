@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ListSkeleton } from "@/components/async-states";
 import { AnimatedNumber } from "@/components/diary/animated-number";
 import { CalorieRing } from "@/components/diary/calorie-ring";
+import { DayAdjustments } from "@/components/diary/day-adjustments";
 import { MealCard } from "@/components/diary/meal-card";
 import { DailyGoalBars } from "@/components/nutrition/goal-bars";
 import { NutritionPanel } from "@/components/nutrition/nutrition-panel";
@@ -91,14 +92,18 @@ export function DiaryDayContent({
   payload,
   onAnalyze,
   onAddMeal,
+  onGoalChanged,
 }: {
   date: string;
   payload: DiaryPayloadDTO | null;
   onAnalyze: () => void;
   onAddMeal: () => void;
+  /** Refetch this day after an activity/exception write changes the goal. */
+  onGoalChanged: () => void;
 }) {
   const [nutritionOpen, setNutritionOpen] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   if (!payload) {
     return <ListSkeleton rows={5} />;
@@ -199,6 +204,39 @@ export function DiaryDayContent({
           </div>
         ) : null}
       </Card>
+
+      {/* Per-date adjustments: skip / override activities, add one-offs */}
+      {payload.goalProfileId ? (
+        <Card className="p-4">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between text-sm font-semibold"
+            aria-expanded={adjustOpen}
+            onClick={() => setAdjustOpen((open) => !open)}
+          >
+            Adjust this day
+            <span className="flex items-center gap-1 font-semibold text-primary">
+              {adjustOpen ? "Hide" : "Edit"}
+              {adjustOpen ? (
+                <ChevronUp className="size-4" aria-hidden />
+              ) : (
+                <ChevronDown className="size-4" aria-hidden />
+              )}
+            </span>
+          </button>
+          {adjustOpen ? (
+            <div className="animate-fade-up pt-3">
+              <DayAdjustments
+                profileId={payload.goalProfileId}
+                date={date}
+                activities={payload.dayActivities ?? []}
+                oneOffs={payload.dayOneOffs ?? []}
+                onChanged={onGoalChanged}
+              />
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
 
       {/* Macros card */}
       <Card className="p-4">

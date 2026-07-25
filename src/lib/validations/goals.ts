@@ -47,3 +47,18 @@ export const updateGoalActivitySchema = z
     displayOrder: z.number().int().min(0).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "Provide a field to update" });
+
+// A date-specific exception: skip/override an activity, or add a one-off.
+export const createGoalExceptionSchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+    activityId: z.uuid().nullish(),
+    kind: z.enum(["skip", "override", "oneoff"]),
+    label: z.string().max(60).nullish(),
+    deltaCarbsG: z.number().nullish(),
+    deltaProteinG: z.number().nullish(),
+    deltaFatG: z.number().nullish(),
+  })
+  .refine((v) => (v.kind === "oneoff" ? !v.activityId : Boolean(v.activityId)), {
+    message: "skip/override need an activityId; oneoff must not have one",
+  });

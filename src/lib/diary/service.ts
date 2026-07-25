@@ -170,13 +170,43 @@ export interface GoalBreakdownLine {
   fatG: number;
 }
 
+/** A recurring activity that matches the day, with its per-date state (for the adjust UI). */
+export interface DayActivity {
+  activityId: string;
+  name: string;
+  carbsG: number;
+  proteinG: number;
+  fatG: number;
+  calories: number;
+  skipped: boolean;
+  overridden: boolean;
+  /** The skip/override exception on this date, if any (to remove it). */
+  exceptionId: string | null;
+}
+
+/** A one-off adjustment logged for this date only. */
+export interface DayOneOff {
+  exceptionId: string;
+  label: string;
+  carbsG: number;
+  proteinG: number;
+  fatG: number;
+  calories: number;
+}
+
 export interface DiaryPayload {
   date: string;
   meals: Array<DiaryMeal & { entries: DiaryEntryWithVerified[]; totals: NutritionSnapshot }>;
   totals: NutritionSnapshot;
   goal: GoalTargets | null;
+  /** The pinned/active profile whose goal this day resolves to (for adjustments). */
+  goalProfileId: string | null;
   /** Base + each active activity/exception, when the day's goal has activities. */
   goalBreakdown: GoalBreakdownLine[] | null;
+  /** Recurring activities matching this weekday, with per-date state; null if none. */
+  dayActivities: DayActivity[] | null;
+  /** One-off adjustments for this date; null if none. */
+  dayOneOffs: DayOneOff[] | null;
 }
 
 /** Calorie contribution of a macro delta (activities store no calorie field). */
@@ -209,7 +239,7 @@ type ActivityInput = Pick<
 >;
 type ExceptionInput = Pick<
   GoalActivityException,
-  "activityId" | "kind" | "label" | "deltaCarbsG" | "deltaProteinG" | "deltaFatG"
+  "id" | "activityId" | "kind" | "label" | "deltaCarbsG" | "deltaProteinG" | "deltaFatG"
 >;
 
 /**
@@ -224,11 +254,16 @@ export function layerGoal(
   exceptions: ExceptionInput[],
   date: string,
   dayOfWeek: number,
-): { goal: GoalTargets; breakdown: GoalBreakdownLine[] } {
+): {
+  goal: GoalTargets;
+  breakdown: GoalBreakdownLine[];
+  dayActivities: DayActivity[];
+  dayOneOffs: DayOneOff[];
+} {
   const exByActivity = new Map(
     exceptions.filter((e) => e.activityId).map((e) => [e.activityId as string, e]),
   );
-  const oneOffs = exceptions.filter((e) => !e.activityId);
+  const oneOffExceptions = exceptions.filter((e) => !e.activityId);
 
   let calories = base.calories;
   let carbsG = base.carbsG;
@@ -237,6 +272,8 @@ export function layerGoal(
   const breakdown: GoalBreakdownLine[] = [
     { label: "Base", calories: base.calories, carbsG: base.carbsG, proteinG: base.proteinG, fatG: base.fatG },
   ];
+  const dayActivities: DayActivity[] = [];
+  const dayOneOffs: DayOneOff[] = [];
 
   const inWindow = (from: string | null, until: string | null) =>
     (!from || from <= date) && (!until || date <= until);
@@ -244,28 +281,46 @@ export function layerGoal(
     .filter((a) => a.daysOfWeek.includes(dayOfWeek) && inWindow(a.effectiveFrom, a.effectiveUntil))
     .sort((x, y) => x.displayOrder - y.displayOrder);
 
-  const apply = (label: string, dC: number, dP: number, dF: number) => {
+  for (const a of matching) {
+    const ex = exByActivity.get(a.id);
+    const skipped = ex?.kind === "skip";
+    const overridden = ex?.kind === "override";
+    const dC = overridden ? (ex!.deltaCarbsG ?? 0) : a.deltaCarbsG;
+    const dP = overridden ? (ex!.deltaProteinG ?? 0) : a.deltaProteinG;
+    const dF = overridden ? (ex!.deltaFatG ?? 0) : a.deltaFatG;
+    const dCal = deltaCalories(dC, dP, dF);
+    // State for the adjust UI (skipped activities still listed so they can be restored).
+    dayActivities.push({
+      activityId: a.id,
+      name: a.name,
+      carbsG: dC,
+      proteinG: dP,
+      fatG: dF,
+      calories: dCal,
+      skipped,
+      overridden,
+      exceptionId: ex?.id ?? null,
+    });
+    if (skipped) continue;
     carbsG += dC;
     proteinG += dP;
     fatG += dF;
+    calories += dCal;
+    breakdown.push({ label: a.name, calories: dCal, carbsG: dC, proteinG: dP, fatG: dF });
+  }
+
+  for (const o of oneOffExceptions) {
+    const dC = o.deltaCarbsG ?? 0;
+    const dP = o.deltaProteinG ?? 0;
+    const dF = o.deltaFatG ?? 0;
     const dCal = deltaCalories(dC, dP, dF);
+    const label = o.label ?? "One-off";
+    dayOneOffs.push({ exceptionId: o.id, label, carbsG: dC, proteinG: dP, fatG: dF, calories: dCal });
+    carbsG += dC;
+    proteinG += dP;
+    fatG += dF;
     calories += dCal;
     breakdown.push({ label, calories: dCal, carbsG: dC, proteinG: dP, fatG: dF });
-  };
-
-  for (const a of matching) {
-    const ex = exByActivity.get(a.id);
-    if (ex?.kind === "skip") continue;
-    const override = ex?.kind === "override";
-    apply(
-      a.name,
-      override ? (ex!.deltaCarbsG ?? 0) : a.deltaCarbsG,
-      override ? (ex!.deltaProteinG ?? 0) : a.deltaProteinG,
-      override ? (ex!.deltaFatG ?? 0) : a.deltaFatG,
-    );
-  }
-  for (const o of oneOffs) {
-    apply(o.label ?? "One-off", o.deltaCarbsG ?? 0, o.deltaProteinG ?? 0, o.deltaFatG ?? 0);
   }
 
   const goal: GoalTargets = {
@@ -278,7 +333,7 @@ export function layerGoal(
     sodiumMgMax: base.sodiumMgMax,
     satFatGMax: base.satFatGMax,
   };
-  return { goal, breakdown };
+  return { goal, breakdown, dayActivities, dayOneOffs };
 }
 
 /** Fetch base + activities + exceptions for a profile/date and layer them. */
@@ -286,13 +341,18 @@ async function resolveGoal(
   goalProfileId: string,
   date: string,
   dayOfWeek: number,
-): Promise<{ goal: GoalTargets | null; breakdown: GoalBreakdownLine[] | null }> {
+): Promise<{
+  goal: GoalTargets | null;
+  breakdown: GoalBreakdownLine[] | null;
+  dayActivities: DayActivity[] | null;
+  dayOneOffs: DayOneOff[] | null;
+}> {
   const [goalDay] = await db
     .select()
     .from(goalDays)
     .where(and(eq(goalDays.goalProfileId, goalProfileId), eq(goalDays.dayOfWeek, dayOfWeek)))
     .limit(1);
-  if (!goalDay) return { goal: null, breakdown: null };
+  if (!goalDay) return { goal: null, breakdown: null, dayActivities: null, dayOneOffs: null };
 
   const [activities, exceptions] = await Promise.all([
     db.select().from(goalActivities).where(eq(goalActivities.goalProfileId, goalProfileId)),
@@ -306,9 +366,20 @@ async function resolveGoal(
         ),
       ),
   ]);
-  const { goal, breakdown } = layerGoal(goalDay, activities, exceptions, date, dayOfWeek);
-  // Only worth surfacing a breakdown when something layered onto the base.
-  return { goal, breakdown: breakdown.length > 1 ? breakdown : null };
+  const { goal, breakdown, dayActivities, dayOneOffs } = layerGoal(
+    goalDay,
+    activities,
+    exceptions,
+    date,
+    dayOfWeek,
+  );
+  return {
+    goal,
+    // Only worth a breakdown when something layered onto the base.
+    breakdown: breakdown.length > 1 ? breakdown : null,
+    dayActivities: dayActivities.length ? dayActivities : null,
+    dayOneOffs: dayOneOffs.length ? dayOneOffs : null,
+  };
 }
 
 export async function getDiaryPayload(
@@ -390,11 +461,15 @@ export async function getDiaryPayload(
   }
   let goal: GoalTargets | null = null;
   let goalBreakdown: GoalBreakdownLine[] | null = null;
+  let dayActivities: DayActivity[] | null = null;
+  let dayOneOffs: DayOneOff[] | null = null;
   if (goalProfileId) {
     const resolved = await resolveGoal(goalProfileId, date, dayOfWeek);
     goal = resolved.goal;
     goalBreakdown = resolved.breakdown;
+    dayActivities = resolved.dayActivities;
+    dayOneOffs = resolved.dayOneOffs;
   }
 
-  return { date, meals, totals, goal, goalBreakdown };
+  return { date, meals, totals, goal, goalProfileId, goalBreakdown, dayActivities, dayOneOffs };
 }

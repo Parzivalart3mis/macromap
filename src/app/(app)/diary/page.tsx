@@ -309,6 +309,7 @@ function DiaryHome() {
                 payload={activePayload}
                 onAnalyze={analyze}
                 onAddMeal={() => setNewMealOpen(true)}
+                onGoalChanged={() => fetchDay(date, true)}
               />
             </motion.div>
           </AnimatePresence>

@@ -58,23 +58,43 @@ describe("layerGoal", () => {
   });
 
   it("a skip exception removes exactly that activity", () => {
-    const skip = [{ activityId: "legsA", kind: "skip" as const, label: null, deltaCarbsG: null, deltaProteinG: null, deltaFatG: null }];
+    const skip = [{ id: "e1", activityId: "legsA", kind: "skip" as const, label: null, deltaCarbsG: null, deltaProteinG: null, deltaFatG: null }];
     const { goal } = layerGoal(base, WEEKDAY, skip, "2026-07-20", 1);
     expect(goal.carbsG).toBe(434 - 78); // Legs A gone
     expect(goal.calories).toBe(3052 - 78 * 4);
   });
 
   it("an override replaces a day's delta", () => {
-    const override = [{ activityId: "legsA", kind: "override" as const, label: null, deltaCarbsG: 40, deltaProteinG: null, deltaFatG: null }];
+    const override = [{ id: "e2", activityId: "legsA", kind: "override" as const, label: null, deltaCarbsG: 40, deltaProteinG: null, deltaFatG: null }];
     const { goal } = layerGoal(base, WEEKDAY, override, "2026-07-20", 1);
     expect(goal.carbsG).toBe(434 - 78 + 40);
   });
 
   it("a one-off adds an ad-hoc adjustment", () => {
-    const oneoff = [{ activityId: null, kind: "oneoff" as const, label: "Extra ride", deltaCarbsG: 30, deltaProteinG: null, deltaFatG: null }];
+    const oneoff = [{ id: "e3", activityId: null, kind: "oneoff" as const, label: "Extra ride", deltaCarbsG: 30, deltaProteinG: null, deltaFatG: null }];
     const { goal, breakdown } = layerGoal(base, WEEKDAY, oneoff, "2026-07-20", 1);
     expect(goal.carbsG).toBe(434 + 30);
     expect(breakdown.at(-1)!.label).toBe("Extra ride");
+  });
+
+  it("reports per-activity state for the adjust UI", () => {
+    const skip = [{ id: "ex1", activityId: "legsA", kind: "skip" as const, label: null, deltaCarbsG: null, deltaProteinG: null, deltaFatG: null }];
+    const { dayActivities } = layerGoal(base, WEEKDAY, skip, "2026-07-20", 1);
+    expect(dayActivities).toHaveLength(5); // all Monday activities, skipped ones included
+    const legs = dayActivities.find((a) => a.activityId === "legsA")!;
+    expect(legs.skipped).toBe(true);
+    expect(legs.exceptionId).toBe("ex1");
+    const shift = dayActivities.find((a) => a.activityId === "shift")!;
+    expect(shift.skipped).toBe(false);
+    expect(shift.exceptionId).toBeNull();
+  });
+
+  it("surfaces one-offs with their exception id", () => {
+    const oneoff = [{ id: "ex9", activityId: null, kind: "oneoff" as const, label: "Extra ride", deltaCarbsG: 30, deltaProteinG: null, deltaFatG: null }];
+    const { dayOneOffs } = layerGoal(base, WEEKDAY, oneoff, "2026-07-20", 1);
+    expect(dayOneOffs).toEqual([
+      { exceptionId: "ex9", label: "Extra ride", carbsG: 30, proteinG: 0, fatG: 0, calories: 120 },
+    ]);
   });
 
   it("respects effective windows and floors at 0", () => {

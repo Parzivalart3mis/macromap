@@ -81,13 +81,39 @@ export interface GoalBreakdownLineDTO {
   fatG: number;
 }
 
+export interface DayActivityDTO {
+  activityId: string;
+  name: string;
+  carbsG: number;
+  proteinG: number;
+  fatG: number;
+  calories: number;
+  skipped: boolean;
+  overridden: boolean;
+  exceptionId: string | null;
+}
+
+export interface DayOneOffDTO {
+  exceptionId: string;
+  label: string;
+  carbsG: number;
+  proteinG: number;
+  fatG: number;
+  calories: number;
+}
+
 export interface DiaryPayloadDTO {
   date: string;
   meals: DiaryMealDTO[];
   totals: NutritionSnapshot;
   goal: GoalDTO | null;
+  goalProfileId: string | null;
   /** Base + activity/exception lines when the day's goal is layered; else null. */
   goalBreakdown: GoalBreakdownLineDTO[] | null;
+  /** Recurring activities on this weekday with per-date state; null if none. */
+  dayActivities: DayActivityDTO[] | null;
+  /** One-off adjustments for this date; null if none. */
+  dayOneOffs: DayOneOffDTO[] | null;
 }
 
 export interface StoreThemeDTO {
