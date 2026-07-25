@@ -218,24 +218,22 @@ function ActivitiesSection({
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MACRO_COLUMNS = [
-  { key: "calories", label: "kcal" },
-  { key: "proteinG", label: "Protein" },
-  { key: "carbsG", label: "Carbs" },
-  { key: "fatG", label: "Fat" },
+  { key: "calories", label: "kcal", optional: false },
+  { key: "proteinG", label: "Protein", optional: false },
+  { key: "carbsG", label: "Carbs", optional: false },
+  { key: "fatG", label: "Fat", optional: false },
 ] as const;
 
-type DayValues = Record<(typeof MACRO_COLUMNS)[number]["key"], string>;
-
-// Optional micro targets, one value applied to every day of the week (blank =
-// no target; the diary simply shows no bar for it).
-const MICRO_FIELDS = [
-  { key: "fiberG", label: "Fiber (g, minimum)" },
-  { key: "sugarGMax", label: "Sugar (g, max)" },
-  { key: "sodiumMgMax", label: "Sodium (mg, max)" },
-  { key: "satFatGMax", label: "Saturated fat (g, max)" },
+// Optional per-day limits (blank = no target). Each day keeps its own value.
+const MICRO_COLUMNS = [
+  { key: "fiberG", label: "Fiber", optional: true },
+  { key: "sugarGMax", label: "Sugar≤", optional: true },
+  { key: "sodiumMgMax", label: "Sodium≤", optional: true },
+  { key: "satFatGMax", label: "SatFat≤", optional: true },
 ] as const;
 
-type MicroValues = Record<(typeof MICRO_FIELDS)[number]["key"], string>;
+type DayKey = (typeof MACRO_COLUMNS)[number]["key"] | (typeof MICRO_COLUMNS)[number]["key"];
+type DayValues = Record<DayKey, string>;
 
 /* Mounted fresh per edit session, so state initializes from the profile. */
 function GoalEditor({
@@ -251,26 +249,29 @@ function GoalEditor({
     const byDow = new Map(profile.days.map((day) => [day.dayOfWeek, day]));
     return Array.from({ length: 7 }, (_, dow) => {
       const day = byDow.get(dow);
+      const num = (v: number | null | undefined) => (v != null ? String(v) : "");
       return {
         calories: String(day?.calories ?? 2000),
         proteinG: String(day?.proteinG ?? 150),
         carbsG: String(day?.carbsG ?? 200),
         fatG: String(day?.fatG ?? 70),
+        fiberG: num(day?.fiberG),
+        sugarGMax: num(day?.sugarGMax),
+        sodiumMgMax: num(day?.sodiumMgMax),
+        satFatGMax: num(day?.satFatGMax),
       };
     });
   });
-  const [micros, setMicros] = useState<MicroValues>(() => {
-    const first = profile.days[0];
-    return {
-      fiberG: first?.fiberG != null ? String(first.fiberG) : "",
-      sugarGMax: first?.sugarGMax != null ? String(first.sugarGMax) : "",
-      sodiumMgMax: first?.sodiumMgMax != null ? String(first.sodiumMgMax) : "",
-      satFatGMax: first?.satFatGMax != null ? String(first.satFatGMax) : "",
-    };
-  });
+  // Limits are opt-in; auto-shown when the profile already has any per-day limit.
+  const [showLimits, setShowLimits] = useState(() =>
+    profile.days.some(
+      (d) =>
+        d.fiberG != null || d.sugarGMax != null || d.sodiumMgMax != null || d.satFatGMax != null,
+    ),
+  );
   const [busy, setBusy] = useState(false);
 
-  function setValue(dow: number, key: keyof DayValues, value: string) {
+  function setValue(dow: number, key: DayKey, value: string) {
     setDays((prev) => prev.map((day, i) => (i === dow ? { ...day, [key]: value } : day)));
   }
 
@@ -279,34 +280,33 @@ function GoalEditor({
   }
 
   async function save() {
-    // Blank micro = no target; otherwise it must be a non-negative number.
-    const microValues: Partial<Record<keyof MicroValues, number>> = {};
-    for (const field of MICRO_FIELDS) {
-      const raw = micros[field.key].trim();
-      if (raw === "") continue;
-      const value = Number(raw);
-      if (!Number.isFinite(value) || value < 0) {
-        toast.error(`Check the ${field.label} value`);
-        return;
-      }
-      microValues[field.key] = value;
-    }
-    const parsed = days.map((day, dayOfWeek) => ({
-      dayOfWeek,
-      calories: Number(day.calories),
-      proteinG: Number(day.proteinG),
-      carbsG: Number(day.carbsG),
-      fatG: Number(day.fatG),
-      ...microValues,
-    }));
-    for (const day of parsed) {
+    // Build each day from its own values; blank limits become null (omitted).
+    const parsed: Array<Record<string, number>> = [];
+    for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
+      const day = days[dayOfWeek];
+      const calories = Number(day.calories);
+      const proteinG = Number(day.proteinG);
+      const carbsG = Number(day.carbsG);
+      const fatG = Number(day.fatG);
       if (
-        !(day.calories > 0) ||
-        [day.proteinG, day.carbsG, day.fatG].some((v) => !Number.isFinite(v) || v < 0)
+        !(calories > 0) ||
+        [proteinG, carbsG, fatG].some((v) => !Number.isFinite(v) || v < 0)
       ) {
-        toast.error(`Check the numbers for ${DAY_NAMES[day.dayOfWeek]}`);
+        toast.error(`Check the numbers for ${DAY_NAMES[dayOfWeek]}`);
         return;
       }
+      const row: Record<string, number> = { dayOfWeek, calories, proteinG, carbsG, fatG };
+      for (const { key, label } of MICRO_COLUMNS) {
+        const raw = day[key].trim();
+        if (raw === "") continue;
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0) {
+          toast.error(`Check ${DAY_NAMES[dayOfWeek]} ${label}`);
+          return;
+        }
+        row[key] = value;
+      }
+      parsed.push(row);
     }
     setBusy(true);
     try {
@@ -324,13 +324,15 @@ function GoalEditor({
     }
   }
 
+  const columns = showLimits ? [...MACRO_COLUMNS, ...MICRO_COLUMNS] : MACRO_COLUMNS;
+
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{profile.name}</DialogTitle>
           <DialogDescription>
-            Set calories and macros per day of week
+            Set calories, macros, and optional limits per day of week
           </DialogDescription>
         </DialogHeader>
         <div className="overflow-x-auto">
@@ -338,7 +340,7 @@ function GoalEditor({
             <thead>
               <tr className="text-left text-xs text-muted-foreground">
                 <th className="py-1 pr-2 font-medium">Day</th>
-                {MACRO_COLUMNS.map((column) => (
+                {columns.map((column) => (
                   <th key={column.key} className="px-1 py-1 font-medium">
                     {column.label}
                   </th>
@@ -350,12 +352,13 @@ function GoalEditor({
               {days.map((day, dow) => (
                 <tr key={dow}>
                   <td className="py-1 pr-2 font-medium">{DAY_NAMES[dow]}</td>
-                  {MACRO_COLUMNS.map((column) => (
+                  {columns.map((column) => (
                     <td key={column.key} className="px-1 py-1">
                       <Input
                         type="number"
                         inputMode="numeric"
                         min={0}
+                        placeholder={column.optional ? "—" : undefined}
                         aria-label={`${DAY_NAMES[dow]} ${column.label}`}
                         className="h-9 w-full min-w-14 px-2 text-sm"
                         value={day[column.key]}
@@ -379,30 +382,14 @@ function GoalEditor({
           </table>
         </div>
 
-        {/* Optional daily micro limits (same value every day of the week) */}
-        <div>
-          <p className="mb-2 text-sm font-semibold">Daily limits (optional)</p>
-          <div className="grid grid-cols-2 gap-2">
-            {MICRO_FIELDS.map((field) => (
-              <label key={field.key} className="block">
-                <span className="mb-1 block text-xs text-muted-foreground">
-                  {field.label}
-                </span>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  placeholder="—"
-                  className="h-9 px-2 text-sm"
-                  value={micros[field.key]}
-                  onChange={(event) =>
-                    setMicros((prev) => ({ ...prev, [field.key]: event.target.value }))
-                  }
-                />
-              </label>
-            ))}
-          </div>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-start text-primary"
+          onClick={() => setShowLimits((s) => !s)}
+        >
+          {showLimits ? "Hide daily limits" : "Add daily limits (fiber, sugar, sodium…)"}
+        </Button>
 
         {/* Recurring activities layered on top of the base day targets */}
         <ActivitiesSection profileId={profile.id} initial={profile.activities} onChanged={onSaved} />
