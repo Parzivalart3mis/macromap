@@ -8,12 +8,17 @@ import {
   diaryEntries,
   diaryMeals,
   foods,
+  goalActivities,
+  goalActivityExceptions,
   goalDays,
   goalProfiles,
   stores,
   type DiaryEntry,
   type DiaryMeal,
   type Food,
+  type GoalActivity,
+  type GoalActivityException,
+  type GoalDay,
 } from "@/lib/db/schema";
 import { foodToNutrition, roundNutrition, scaleNutrition, sumNutrition } from "@/lib/nutrition";
 import type { NutritionSnapshot } from "@/types/nutrition";
@@ -145,20 +150,165 @@ export function buildEntrySnapshot(
 /** A logged entry plus whether its food currently carries the verified badge. */
 export type DiaryEntryWithVerified = DiaryEntry & { verified: boolean };
 
+export interface GoalTargets {
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fiberG: number | null;
+  sugarGMax: number | null;
+  sodiumMgMax: number | null;
+  satFatGMax: number | null;
+}
+
+/** One line of the target breakdown ("Base 2,100", "Legs A +312"). */
+export interface GoalBreakdownLine {
+  label: string;
+  calories: number;
+  carbsG: number;
+  proteinG: number;
+  fatG: number;
+}
+
 export interface DiaryPayload {
   date: string;
   meals: Array<DiaryMeal & { entries: DiaryEntryWithVerified[]; totals: NutritionSnapshot }>;
   totals: NutritionSnapshot;
-  goal: {
-    calories: number;
-    proteinG: number;
-    carbsG: number;
-    fatG: number;
-    fiberG: number | null;
-    sugarGMax: number | null;
-    sodiumMgMax: number | null;
-    satFatGMax: number | null;
-  } | null;
+  goal: GoalTargets | null;
+  /** Base + each active activity/exception, when the day's goal has activities. */
+  goalBreakdown: GoalBreakdownLine[] | null;
+}
+
+/** Calorie contribution of a macro delta (activities store no calorie field). */
+function deltaCalories(carbsG: number, proteinG: number, fatG: number): number {
+  return 4 * carbsG + 4 * proteinG + 9 * fatG;
+}
+
+type BaseGoal = Pick<
+  GoalDay,
+  | "calories"
+  | "carbsG"
+  | "proteinG"
+  | "fatG"
+  | "fiberG"
+  | "sugarGMax"
+  | "sodiumMgMax"
+  | "satFatGMax"
+>;
+type ActivityInput = Pick<
+  GoalActivity,
+  | "id"
+  | "name"
+  | "daysOfWeek"
+  | "deltaCarbsG"
+  | "deltaProteinG"
+  | "deltaFatG"
+  | "displayOrder"
+  | "effectiveFrom"
+  | "effectiveUntil"
+>;
+type ExceptionInput = Pick<
+  GoalActivityException,
+  "activityId" | "kind" | "label" | "deltaCarbsG" | "deltaProteinG" | "deltaFatG"
+>;
+
+/**
+ * Pure target layering (no DB): final = base + each recurring activity matching
+ * the weekday/date, adjusted by that date's exceptions (skip / override /
+ * one-off). Calories auto-derive from macro deltas; fiber and ceiling limits stay
+ * base-only; everything floors at 0.
+ */
+export function layerGoal(
+  base: BaseGoal,
+  activities: ActivityInput[],
+  exceptions: ExceptionInput[],
+  date: string,
+  dayOfWeek: number,
+): { goal: GoalTargets; breakdown: GoalBreakdownLine[] } {
+  const exByActivity = new Map(
+    exceptions.filter((e) => e.activityId).map((e) => [e.activityId as string, e]),
+  );
+  const oneOffs = exceptions.filter((e) => !e.activityId);
+
+  let calories = base.calories;
+  let carbsG = base.carbsG;
+  let proteinG = base.proteinG;
+  let fatG = base.fatG;
+  const breakdown: GoalBreakdownLine[] = [
+    { label: "Base", calories: base.calories, carbsG: base.carbsG, proteinG: base.proteinG, fatG: base.fatG },
+  ];
+
+  const inWindow = (from: string | null, until: string | null) =>
+    (!from || from <= date) && (!until || date <= until);
+  const matching = activities
+    .filter((a) => a.daysOfWeek.includes(dayOfWeek) && inWindow(a.effectiveFrom, a.effectiveUntil))
+    .sort((x, y) => x.displayOrder - y.displayOrder);
+
+  const apply = (label: string, dC: number, dP: number, dF: number) => {
+    carbsG += dC;
+    proteinG += dP;
+    fatG += dF;
+    const dCal = deltaCalories(dC, dP, dF);
+    calories += dCal;
+    breakdown.push({ label, calories: dCal, carbsG: dC, proteinG: dP, fatG: dF });
+  };
+
+  for (const a of matching) {
+    const ex = exByActivity.get(a.id);
+    if (ex?.kind === "skip") continue;
+    const override = ex?.kind === "override";
+    apply(
+      a.name,
+      override ? (ex!.deltaCarbsG ?? 0) : a.deltaCarbsG,
+      override ? (ex!.deltaProteinG ?? 0) : a.deltaProteinG,
+      override ? (ex!.deltaFatG ?? 0) : a.deltaFatG,
+    );
+  }
+  for (const o of oneOffs) {
+    apply(o.label ?? "One-off", o.deltaCarbsG ?? 0, o.deltaProteinG ?? 0, o.deltaFatG ?? 0);
+  }
+
+  const goal: GoalTargets = {
+    calories: Math.max(0, Math.round(calories)),
+    proteinG: Math.max(0, proteinG),
+    carbsG: Math.max(0, carbsG),
+    fatG: Math.max(0, fatG),
+    fiberG: base.fiberG,
+    sugarGMax: base.sugarGMax,
+    sodiumMgMax: base.sodiumMgMax,
+    satFatGMax: base.satFatGMax,
+  };
+  return { goal, breakdown };
+}
+
+/** Fetch base + activities + exceptions for a profile/date and layer them. */
+async function resolveGoal(
+  goalProfileId: string,
+  date: string,
+  dayOfWeek: number,
+): Promise<{ goal: GoalTargets | null; breakdown: GoalBreakdownLine[] | null }> {
+  const [goalDay] = await db
+    .select()
+    .from(goalDays)
+    .where(and(eq(goalDays.goalProfileId, goalProfileId), eq(goalDays.dayOfWeek, dayOfWeek)))
+    .limit(1);
+  if (!goalDay) return { goal: null, breakdown: null };
+
+  const [activities, exceptions] = await Promise.all([
+    db.select().from(goalActivities).where(eq(goalActivities.goalProfileId, goalProfileId)),
+    db
+      .select()
+      .from(goalActivityExceptions)
+      .where(
+        and(
+          eq(goalActivityExceptions.goalProfileId, goalProfileId),
+          eq(goalActivityExceptions.date, date),
+        ),
+      ),
+  ]);
+  const { goal, breakdown } = layerGoal(goalDay, activities, exceptions, date, dayOfWeek);
+  // Only worth surfacing a breakdown when something layered onto the base.
+  return { goal, breakdown: breakdown.length > 1 ? breakdown : null };
 }
 
 export async function getDiaryPayload(
@@ -238,28 +388,13 @@ export async function getDiaryPayload(
       .limit(1);
     goalProfileId = active?.id ?? null;
   }
-  let goal: DiaryPayload["goal"] = null;
+  let goal: GoalTargets | null = null;
+  let goalBreakdown: GoalBreakdownLine[] | null = null;
   if (goalProfileId) {
-    const [goalDay] = await db
-      .select()
-      .from(goalDays)
-      .where(
-        and(eq(goalDays.goalProfileId, goalProfileId), eq(goalDays.dayOfWeek, dayOfWeek)),
-      )
-      .limit(1);
-    if (goalDay) {
-      goal = {
-        calories: goalDay.calories,
-        proteinG: goalDay.proteinG,
-        carbsG: goalDay.carbsG,
-        fatG: goalDay.fatG,
-        fiberG: goalDay.fiberG,
-        sugarGMax: goalDay.sugarGMax,
-        sodiumMgMax: goalDay.sodiumMgMax,
-        satFatGMax: goalDay.satFatGMax,
-      };
-    }
+    const resolved = await resolveGoal(goalProfileId, date, dayOfWeek);
+    goal = resolved.goal;
+    goalBreakdown = resolved.breakdown;
   }
 
-  return { date, meals, totals, goal };
+  return { date, meals, totals, goal, goalBreakdown };
 }

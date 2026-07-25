@@ -73,11 +73,21 @@ export interface GoalDTO {
   satFatGMax: number | null;
 }
 
+export interface GoalBreakdownLineDTO {
+  label: string;
+  calories: number;
+  carbsG: number;
+  proteinG: number;
+  fatG: number;
+}
+
 export interface DiaryPayloadDTO {
   date: string;
   meals: DiaryMealDTO[];
   totals: NutritionSnapshot;
   goal: GoalDTO | null;
+  /** Base + activity/exception lines when the day's goal is layered; else null. */
+  goalBreakdown: GoalBreakdownLineDTO[] | null;
 }
 
 export interface StoreThemeDTO {
@@ -187,6 +197,16 @@ export interface BodyMetricLogDTO {
   notes: string | null;
 }
 
+export interface GoalActivityDTO {
+  id: string;
+  name: string;
+  daysOfWeek: number[];
+  deltaCarbsG: number;
+  deltaProteinG: number;
+  deltaFatG: number;
+  displayOrder: number;
+}
+
 export interface GoalProfileDTO {
   id: string;
   name: string;
@@ -203,6 +223,7 @@ export interface GoalProfileDTO {
     sodiumMgMax: number | null;
     satFatGMax: number | null;
   }>;
+  activities: GoalActivityDTO[];
 }
 
 export interface StreakDTO {

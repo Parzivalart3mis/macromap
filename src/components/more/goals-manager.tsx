@@ -24,7 +24,197 @@ import {
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
-import type { GoalProfileDTO } from "@/types/api";
+import type { GoalActivityDTO, GoalProfileDTO } from "@/types/api";
+
+const DOW_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+
+/** Activity value math preview: carbs/protein × 4 + fat × 9. */
+function activityCalories(a: Pick<GoalActivityDTO, "deltaCarbsG" | "deltaProteinG" | "deltaFatG">) {
+  return Math.round(4 * a.deltaCarbsG + 4 * a.deltaProteinG + 9 * a.deltaFatG);
+}
+
+/** Blank draft for the add form. */
+function emptyDraft() {
+  return { name: "", days: [false, false, false, false, false, false, false], c: "", p: "", f: "" };
+}
+type ActivityDraft = ReturnType<typeof emptyDraft>;
+
+/** Per-profile recurring activities: add / edit / delete, layered on the base. */
+function ActivitiesSection({
+  profileId,
+  initial,
+  onChanged,
+}: {
+  profileId: string;
+  initial: GoalActivityDTO[];
+  onChanged: () => void;
+}) {
+  const [activities, setActivities] = useState<GoalActivityDTO[]>(initial);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ActivityDraft | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function startAdd() {
+    setEditingId(null);
+    setDraft(emptyDraft());
+  }
+  function startEdit(a: GoalActivityDTO) {
+    setEditingId(a.id);
+    setDraft({
+      name: a.name,
+      days: Array.from({ length: 7 }, (_, d) => a.daysOfWeek.includes(d)),
+      c: String(a.deltaCarbsG),
+      p: String(a.deltaProteinG),
+      f: String(a.deltaFatG),
+    });
+  }
+
+  async function saveDraft() {
+    if (!draft) return;
+    const daysOfWeek = draft.days.flatMap((on, d) => (on ? [d] : []));
+    if (!draft.name.trim()) return toast.error("Name the activity");
+    if (daysOfWeek.length === 0) return toast.error("Pick at least one day");
+    const body = {
+      name: draft.name.trim(),
+      daysOfWeek,
+      deltaCarbsG: Number(draft.c) || 0,
+      deltaProteinG: Number(draft.p) || 0,
+      deltaFatG: Number(draft.f) || 0,
+    };
+    setBusy(true);
+    try {
+      if (editingId) {
+        const { activity } = await apiFetch<{ activity: GoalActivityDTO }>(
+          `/api/goals/${profileId}/activities/${editingId}`,
+          { method: "PATCH", body: JSON.stringify(body) },
+        );
+        setActivities((prev) => prev.map((a) => (a.id === editingId ? activity : a)));
+      } else {
+        const { activity } = await apiFetch<{ activity: GoalActivityDTO }>(
+          `/api/goals/${profileId}/activities`,
+          { method: "POST", body: JSON.stringify(body) },
+        );
+        setActivities((prev) => [...prev, activity]);
+      }
+      setDraft(null);
+      setEditingId(null);
+      onChanged();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save activity");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(a: GoalActivityDTO) {
+    if (!window.confirm(`Delete "${a.name}"?`)) return;
+    try {
+      await apiFetch(`/api/goals/${profileId}/activities/${a.id}`, { method: "DELETE" });
+      setActivities((prev) => prev.filter((x) => x.id !== a.id));
+      onChanged();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Delete failed");
+    }
+  }
+
+  return (
+    <div>
+      <p className="mb-1 text-sm font-semibold">Activities</p>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Recurring macro adjustments added on top of the base days. Calories derive from the macros.
+      </p>
+      <ul className="space-y-1.5">
+        {activities.map((a) => (
+          <li
+            key={a.id}
+            className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{a.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {a.daysOfWeek.map((d) => DOW_LETTERS[d]).join(" ")} · +{a.deltaCarbsG}c
+                {a.deltaProteinG ? ` +${a.deltaProteinG}p` : ""}
+                {a.deltaFatG ? ` +${a.deltaFatG}f` : ""} · {activityCalories(a)} cal
+              </span>
+            </span>
+            <Button variant="ghost" size="icon-sm" aria-label={`Edit ${a.name}`} onClick={() => startEdit(a)}>
+              <Pencil aria-hidden />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-destructive"
+              aria-label={`Delete ${a.name}`}
+              onClick={() => remove(a)}
+            >
+              <Trash2 aria-hidden />
+            </Button>
+          </li>
+        ))}
+      </ul>
+
+      {draft ? (
+        <div className="mt-2 space-y-2 rounded-lg border bg-muted/40 p-3">
+          <Input
+            placeholder="Activity name"
+            value={draft.name}
+            maxLength={60}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            className="h-9 text-sm"
+          />
+          <div className="flex justify-between gap-1">
+            {DOW_LETTERS.map((letter, d) => (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={draft.days[d]}
+                onClick={() =>
+                  setDraft({ ...draft, days: draft.days.map((on, i) => (i === d ? !on : on)) })
+                }
+                className={
+                  draft.days[d]
+                    ? "size-8 rounded-full bg-primary text-sm font-semibold text-primary-foreground"
+                    : "size-8 rounded-full border text-sm text-muted-foreground"
+                }
+              >
+                {letter}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {(["c", "p", "f"] as const).map((k) => (
+              <label key={k} className="block">
+                <span className="mb-1 block text-xs text-muted-foreground">
+                  {k === "c" ? "Carbs" : k === "p" ? "Protein" : "Fat"} g
+                </span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={draft[k]}
+                  onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
+                  className="h-9 px-2 text-sm"
+                />
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" disabled={busy} onClick={saveDraft}>
+              {busy ? "..." : editingId ? "Update" : "Add"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button size="sm" variant="outline" className="mt-2" onClick={startAdd}>
+          <Plus data-icon="inline-start" aria-hidden />
+          Add activity
+        </Button>
+      )}
+    </div>
+  );
+}
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MACRO_COLUMNS = [
@@ -213,6 +403,9 @@ function GoalEditor({
             ))}
           </div>
         </div>
+
+        {/* Recurring activities layered on top of the base day targets */}
+        <ActivitiesSection profileId={profile.id} initial={profile.activities} onChanged={onSaved} />
 
         <Button disabled={busy} onClick={save}>
           {busy ? "Saving..." : "Save goals"}

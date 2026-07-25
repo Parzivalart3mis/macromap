@@ -98,12 +98,13 @@ export function DiaryDayContent({
   onAddMeal: () => void;
 }) {
   const [nutritionOpen, setNutritionOpen] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
 
   if (!payload) {
     return <ListSkeleton rows={5} />;
   }
 
-  const { goal, totals } = payload;
+  const { goal, totals, goalBreakdown } = payload;
   const remaining = goal ? Math.round(goal.calories - totals.calories) : null;
   const over = remaining != null && remaining < 0;
 
@@ -135,12 +136,33 @@ export function DiaryDayContent({
           </CalorieRing>
 
           <div className="flex-1 space-y-2 text-sm">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-muted-foreground">Goal</span>
-              <span className="font-semibold tabular-nums">
-                {goal ? goal.calories.toLocaleString() : "—"}
-              </span>
-            </div>
+            {goalBreakdown ? (
+              <button
+                type="button"
+                className="flex w-full items-baseline justify-between gap-2"
+                aria-expanded={breakdownOpen}
+                onClick={() => setBreakdownOpen((open) => !open)}
+              >
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  Goal
+                  {breakdownOpen ? (
+                    <ChevronUp className="size-3.5" aria-hidden />
+                  ) : (
+                    <ChevronDown className="size-3.5" aria-hidden />
+                  )}
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {goal ? goal.calories.toLocaleString() : "—"}
+                </span>
+              </button>
+            ) : (
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-muted-foreground">Goal</span>
+                <span className="font-semibold tabular-nums">
+                  {goal ? goal.calories.toLocaleString() : "—"}
+                </span>
+              </div>
+            )}
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-muted-foreground">Food</span>
               <span className="font-semibold tabular-nums">
@@ -161,6 +183,21 @@ export function DiaryDayContent({
             </div>
           </div>
         </div>
+
+        {/* "Why this number?" — base + each activity contributing to the goal */}
+        {goalBreakdown && breakdownOpen ? (
+          <div className="animate-fade-up mt-3 space-y-1 border-t pt-3 text-sm">
+            {goalBreakdown.map((line, i) => (
+              <div key={i} className="flex items-baseline justify-between gap-2">
+                <span className="min-w-0 truncate text-muted-foreground">{line.label}</span>
+                <span className="shrink-0 tabular-nums">
+                  {i === 0 ? "" : "+"}
+                  {Math.round(line.calories).toLocaleString()} cal
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </Card>
 
       {/* Macros card */}

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { handleApiError, parseBody, requireDbUser, requireUserId } from "@/lib/api";
 import { db } from "@/lib/db";
-import { goalDays, goalProfiles } from "@/lib/db/schema";
+import { goalActivities, goalDays, goalProfiles } from "@/lib/db/schema";
 import { createGoalProfileSchema } from "@/lib/validations/goals";
 
 const DEFAULT_DAY = { calories: 2000, proteinG: 150, carbsG: 200, fatG: 70 };
@@ -16,22 +16,26 @@ export async function GET() {
       .from(goalProfiles)
       .where(eq(goalProfiles.userId, userId))
       .orderBy(asc(goalProfiles.createdAt));
-    const dayRows = profileRows.length
-      ? await db
-          .select()
-          .from(goalDays)
-          .where(
-            inArray(
-              goalDays.goalProfileId,
-              profileRows.map((p) => p.id),
-            ),
-          )
-          .orderBy(asc(goalDays.dayOfWeek))
-      : [];
+    const profileIds = profileRows.map((p) => p.id);
+    const [dayRows, activityRows] = profileRows.length
+      ? await Promise.all([
+          db
+            .select()
+            .from(goalDays)
+            .where(inArray(goalDays.goalProfileId, profileIds))
+            .orderBy(asc(goalDays.dayOfWeek)),
+          db
+            .select()
+            .from(goalActivities)
+            .where(inArray(goalActivities.goalProfileId, profileIds))
+            .orderBy(asc(goalActivities.displayOrder)),
+        ])
+      : [[], []];
     return NextResponse.json({
       goalProfiles: profileRows.map((profile) => ({
         ...profile,
         days: dayRows.filter((day) => day.goalProfileId === profile.id),
+        activities: activityRows.filter((a) => a.goalProfileId === profile.id),
       })),
     });
   } catch (error) {

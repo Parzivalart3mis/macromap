@@ -18,6 +18,7 @@ function payload(overrides: Partial<DiaryPayload> = {}): DiaryPayload {
       sodiumMgMax: 2300,
       satFatGMax: null,
     },
+    goalBreakdown: null,
     ...overrides,
   };
 }

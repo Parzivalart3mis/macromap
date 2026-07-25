@@ -91,6 +91,60 @@ export const goalDays = pgTable(
   (t) => [uniqueIndex("goal_days_profile_day_idx").on(t.goalProfileId, t.dayOfWeek)],
 );
 
+/** Signed macro adjustment that recurs on given weekdays, layered on the base. */
+export const goalActivities = pgTable(
+  "goal_activities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    goalProfileId: uuid("goal_profile_id")
+      .notNull()
+      .references(() => goalProfiles.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Subset of 0..6 (0 = Sunday) this activity recurs on.
+    daysOfWeek: integer("days_of_week").array().notNull(),
+    deltaCarbsG: doublePrecision("delta_carbs_g").notNull().default(0),
+    deltaProteinG: doublePrecision("delta_protein_g").notNull().default(0),
+    deltaFatG: doublePrecision("delta_fat_g").notNull().default(0),
+    displayOrder: integer("display_order").notNull().default(0),
+    // Optional window; null bounds mean "always".
+    effectiveFrom: date("effective_from"),
+    effectiveUntil: date("effective_until"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("goal_activities_profile_idx").on(t.goalProfileId)],
+);
+
+export const goalExceptionKindEnum = pgEnum("goal_exception_kind", [
+  "skip",
+  "override",
+  "oneoff",
+]);
+
+/**
+ * Date-specific exception to the recurring activities: skip one occurrence,
+ * override its deltas for a date, or add a one-off (no activity_id) adjustment.
+ */
+export const goalActivityExceptions = pgTable(
+  "goal_activity_exceptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    goalProfileId: uuid("goal_profile_id")
+      .notNull()
+      .references(() => goalProfiles.id, { onDelete: "cascade" }),
+    activityId: uuid("activity_id").references(() => goalActivities.id, {
+      onDelete: "cascade",
+    }),
+    date: date("date").notNull(),
+    kind: goalExceptionKindEnum("kind").notNull(),
+    label: text("label"),
+    deltaCarbsG: doublePrecision("delta_carbs_g"),
+    deltaProteinG: doublePrecision("delta_protein_g"),
+    deltaFatG: doublePrecision("delta_fat_g"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("goal_activity_exceptions_profile_date_idx").on(t.goalProfileId, t.date)],
+);
+
 export const foods = pgTable(
   "foods",
   {
@@ -401,6 +455,8 @@ export type User = typeof users.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type GoalProfile = typeof goalProfiles.$inferSelect;
 export type GoalDay = typeof goalDays.$inferSelect;
+export type GoalActivity = typeof goalActivities.$inferSelect;
+export type GoalActivityException = typeof goalActivityExceptions.$inferSelect;
 export type Food = typeof foods.$inferSelect;
 export type NewFood = typeof foods.$inferInsert;
 export type Store = typeof stores.$inferSelect;
