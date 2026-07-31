@@ -205,8 +205,11 @@ function DiaryHome() {
       fetchDay(dateRef.current, true);
     } catch (err) {
       setInsights(null);
-      setAnalyzing(false);
       toast.error(err instanceof Error ? err.message : "Could not complete the day");
+    } finally {
+      // Always clear the loading state so the dialog flips from "Analyzing…" to
+      // the insights (or closes on error).
+      setAnalyzing(false);
     }
   }
 
