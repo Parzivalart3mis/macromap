@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
+import { haptic } from "@/lib/client/haptics";
 import { addDaysISO, formatClock, formatDisplayDate, todayISO } from "@/lib/dates";
 import type { DiaryEntryDTO, DiaryMealDTO, DiaryPayloadDTO } from "@/types/api";
 
@@ -242,6 +243,7 @@ function MealDetail() {
   async function deleteEntry(entry: DiaryEntryDTO) {
     // Hide immediately so the swipe-out is not undone by the reload.
     setHidden((prev) => new Set(prev).add(entry.id));
+    haptic("warning");
     try {
       await apiFetch(`/api/diary/entries/${entry.id}`, { method: "DELETE" });
       toast.success(`Removed ${entry.nutritionSnapshotJson.label}`, {

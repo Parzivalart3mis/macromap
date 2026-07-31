@@ -1,8 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "framer-motion";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Flame, Plus } from "lucide-react";
-import Link from "next/link";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Flame } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -10,6 +9,7 @@ import { toast } from "sonner";
 import { ErrorState } from "@/components/async-states";
 import { CalendarPopover } from "@/components/diary/calendar-popover";
 import { DiaryDayContent } from "@/components/diary/day-content";
+import { QuickLogFab } from "@/components/diary/quick-log-fab";
 import { StreakPopover } from "@/components/diary/streak-popover";
 import { WeekStrip } from "@/components/diary/week-strip";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
+import { haptic } from "@/lib/client/haptics";
 import { addDaysISO, formatDisplayDate, todayISO } from "@/lib/dates";
 import { defaultMealForNow } from "@/lib/store-theme";
 import { cn } from "@/lib/utils";
@@ -202,6 +203,7 @@ function DiaryHome() {
         body: JSON.stringify({ date }),
       });
       setInsights(data.insights);
+      haptic("success");
       fetchDay(dateRef.current, true);
     } catch (err) {
       setInsights(null);
@@ -352,18 +354,8 @@ function DiaryHome() {
         </div>
       )}
 
-      {/* Floating quick-log button */}
-      <Button
-        size="icon-lg"
-        aria-label="Log food"
-        className="fixed right-4 z-40 size-14 [&_svg]:size-6"
-        style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}
-        asChild
-      >
-        <Link href={`/diary/add?date=${date}&meal=${encodeURIComponent(defaultMealForNow())}`}>
-          <Plus aria-hidden />
-        </Link>
-      </Button>
+      {/* Floating quick-log button with a fan-out of logging modes */}
+      <QuickLogFab date={date} meal={defaultMealForNow()} />
 
       <Dialog open={newMealOpen} onOpenChange={setNewMealOpen}>
         <DialogContent>

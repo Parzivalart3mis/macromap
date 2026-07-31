@@ -6,7 +6,11 @@ import { toast } from "sonner";
 
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
 import { MacroMeter } from "@/components/nutrition/macro-meter";
-import { CalorieHistoryChart, WeightChart } from "@/components/progress/charts";
+import {
+  CalorieHistoryChart,
+  LoggedDaysHeatmap,
+  WeightChart,
+} from "@/components/progress/charts";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -262,6 +266,18 @@ export default function ProgressPage() {
           </Card>
 
           <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Consistency</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LoggedDaysHeatmap
+                loggedDates={overview.loggedDates}
+                todayISO={todayISO()}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-base">Weight</CardTitle>
               <Button size="sm" variant="secondary" onClick={() => setWeightOpen(true)}>
@@ -276,7 +292,12 @@ export default function ProgressPage() {
                   body="Log your first weigh-in to start the trend line."
                 />
               ) : (
-                <WeightChart data={overview.weights} />
+                <>
+                  <WeightChart data={overview.weights} />
+                  <p className="mt-1 text-center text-[10px] text-muted-foreground">
+                    Bold line is your smoothed trend, faint dots are daily readings
+                  </p>
+                </>
               )}
             </CardContent>
           </Card>

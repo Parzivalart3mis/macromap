@@ -3,7 +3,15 @@ import { NextResponse } from "next/server";
 
 import { handleApiError, requireUserId } from "@/lib/api";
 import { db } from "@/lib/db";
-import { bodyMetricLogs, goalDays, goalProfiles, weightLogs } from "@/lib/db/schema";
+import {
+  bodyMetricLogs,
+  diaryDays,
+  diaryEntries,
+  diaryMeals,
+  goalDays,
+  goalProfiles,
+  weightLogs,
+} from "@/lib/db/schema";
 import { getDiaryPayload } from "@/lib/diary/service";
 import { getReportData } from "@/lib/reports/data";
 
@@ -18,6 +26,7 @@ export async function GET() {
     const now = new Date();
     const today = isoDate(now);
     const twoWeeksAgo = isoDate(new Date(now.getTime() - 13 * 86_400_000));
+    const twelveWeeksAgo = isoDate(new Date(now.getTime() - 83 * 86_400_000));
     const ninetyDaysAgo = isoDate(new Date(now.getTime() - 89 * 86_400_000));
 
     const [todayPayload, recent] = await Promise.all([
@@ -52,6 +61,16 @@ export async function GET() {
       });
     }
 
+    // Distinct dates in the last 12 weeks that have at least one logged entry,
+    // for the consistency heatmap.
+    const loggedRows = await db
+      .selectDistinct({ date: diaryDays.date })
+      .from(diaryDays)
+      .innerJoin(diaryMeals, eq(diaryMeals.diaryDayId, diaryDays.id))
+      .innerJoin(diaryEntries, eq(diaryEntries.diaryMealId, diaryMeals.id))
+      .where(and(eq(diaryDays.userId, userId), gte(diaryDays.date, twelveWeeksAgo)));
+    const loggedDates = loggedRows.map((row) => row.date);
+
     const weights = await db
       .select()
       .from(weightLogs)
@@ -67,6 +86,7 @@ export async function GET() {
     return NextResponse.json({
       today: { totals: todayPayload.totals, goal: todayPayload.goal },
       calorieHistory,
+      loggedDates,
       weights,
       bodyMetrics,
     });

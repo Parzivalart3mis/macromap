@@ -68,6 +68,14 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body className="antialiased">
+          {/* Apply saved theme / text-size before paint to avoid a flash. Unset
+              stays light, matching the app's default appearance. */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html:
+                "(function(){try{var t=localStorage.getItem('mm-theme');var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);var s=localStorage.getItem('mm-text-size');if(s==='large'){document.documentElement.style.fontSize='18px';}else if(s==='larger'){document.documentElement.style.fontSize='20px';}}catch(e){}})();",
+            }}
+          />
           {children}
           <Toaster
             position="top-center"

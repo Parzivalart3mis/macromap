@@ -265,6 +265,8 @@ export interface StreakDTO {
 export interface ProgressOverviewDTO {
   today: { totals: NutritionSnapshot; goal: GoalDTO | null };
   calorieHistory: Array<{ date: string; calories: number; goal: number | null }>;
+  /** Distinct dates (last ~12 weeks) with at least one logged entry. */
+  loggedDates: string[];
   weights: WeightLogDTO[];
   bodyMetrics: BodyMetricLogDTO[];
 }

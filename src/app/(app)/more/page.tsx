@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { AppearanceSettings } from "@/components/more/appearance-settings";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -133,6 +134,13 @@ export default function MorePage() {
             ))}
           </ul>
         </Card>
+
+        <div>
+          <h3 className="mb-2 px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Appearance
+          </h3>
+          <AppearanceSettings />
+        </div>
 
         <Card className="p-2">
           <SignOutButton redirectUrl="/">

@@ -203,7 +203,15 @@ export function DiaryDayContent({
       {/* Calorie ring card */}
       <Card className="p-4">
         <div className="flex items-center gap-5">
-          <CalorieRing consumed={totals.calories} goal={goal?.calories ?? 0}>
+          <CalorieRing
+            consumed={totals.calories}
+            goal={goal?.calories ?? 0}
+            macros={{
+              carbsG: totals.carbsG,
+              fatG: totals.fatG,
+              proteinG: totals.proteinG,
+            }}
+          >
             {remaining != null ? (
               <>
                 <AnimatedNumber

@@ -34,6 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useVoiceLogging } from "@/hooks/useVoiceLogging";
 import { apiFetch } from "@/lib/client/fetcher";
+import { haptic } from "@/lib/client/haptics";
 import { todayISO } from "@/lib/dates";
 import { nativeServingLabel, nativeServingTextFor } from "@/lib/units";
 import { cn } from "@/lib/utils";
@@ -320,8 +321,11 @@ function AddFoodView() {
     router.push(`/diary/log?${p.toString()}`);
   }
 
-  // Modes
-  const [mode, setMode] = useState<Mode>(null);
+  // Modes — a `mode` query param (from the diary FAB) opens straight into one.
+  const [mode, setMode] = useState<Mode>(() => {
+    const m = searchParams.get("mode");
+    return m === "barcode" || m === "voice" || m === "text" ? m : null;
+  });
   const [barcodeValue, setBarcodeValue] = useState("");
   const [scanning, setScanning] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
@@ -453,6 +457,7 @@ function AddFoodView() {
         loggedVia: via,
       }),
     });
+    haptic("success");
     toast.success(`Logged to ${mealName}`);
   }
 
@@ -481,6 +486,7 @@ function AddFoodView() {
             loggedVia: "search",
           }),
         });
+        haptic("success");
         toast.success(`Logged to ${mealName}`);
       } else {
         await logFood(food, quantity, "search");
