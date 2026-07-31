@@ -1,7 +1,15 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { ChevronDown, ChevronUp, Plus, Sparkles } from "lucide-react";
+import {
+  ArrowLeftRight,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import { useState } from "react";
 
 import { ListSkeleton } from "@/components/async-states";
@@ -15,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { DiaryMealDTO, DiaryPayloadDTO } from "@/types/api";
+import type { NutritionSnapshot } from "@/types/nutrition";
 
 const DEFAULT_MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"];
 
@@ -36,31 +45,53 @@ function mergedMeals(payload: DiaryPayloadDTO): DiaryMealDTO[] {
   return [...defaults, ...custom];
 }
 
+/** The three macro-card views the ⇄ button cycles through. */
+type MacroView = "consumed" | "remaining" | "percent";
+const MACRO_VIEWS: MacroView[] = ["consumed", "remaining", "percent"];
+
+const MACROS = [
+  { label: "Carbs", key: "carbsG", colorVar: "--macro-carbs", perGram: 4 },
+  { label: "Fat", key: "fatG", colorVar: "--macro-fat", perGram: 9 },
+  { label: "Protein", key: "proteinG", colorVar: "--macro-protein", perGram: 4 },
+] as const;
+
 function MacroBar({
   label,
   value,
   target,
   colorVar,
+  mode,
 }: {
   label: string;
   value: number;
   target: number | null;
   colorVar: string;
+  mode: "consumed" | "remaining";
 }) {
   const reduce = useReducedMotion();
   const pct = target && target > 0 ? Math.min(1, value / target) : value > 0 ? 1 : 0;
   const over = target != null && target > 0 && value > target;
+  const remaining = target != null ? Math.max(0, Math.round(target - value)) : null;
   return (
     <div className="min-w-0 flex-1">
       <p className="text-sm font-medium">{label}</p>
       <p className="text-lg font-bold tabular-nums">
-        {Math.round(value)}g
-        {target ? (
-          <span className="text-sm font-normal text-muted-foreground">
-            {" "}
-            / {Math.round(target)}
-          </span>
-        ) : null}
+        {mode === "remaining" && remaining != null ? (
+          <>
+            {remaining}g{" "}
+            <span className="text-sm font-normal text-muted-foreground">left</span>
+          </>
+        ) : (
+          <>
+            {Math.round(value)}g
+            {target ? (
+              <span className="text-sm font-normal text-muted-foreground">
+                {" "}
+                / {Math.round(target)}
+              </span>
+            ) : null}
+          </>
+        )}
       </p>
       <div
         role="meter"
@@ -82,6 +113,36 @@ function MacroBar({
   );
 }
 
+/** "Percent" view: each macro's share of total macro calories + one stacked bar. */
+function MacroPercent({ totals }: { totals: NutritionSnapshot }) {
+  const cals = MACROS.map((m) => (totals[m.key] ?? 0) * m.perGram);
+  const total = cals.reduce((a, b) => a + b, 0) || 1;
+  const pcts = cals.map((c) => Math.round((c / total) * 100));
+  return (
+    <div>
+      <div className="flex gap-4">
+        {MACROS.map((m, i) => (
+          <div key={m.label} className="min-w-0 flex-1">
+            <p className="flex items-center gap-1.5 text-sm font-medium">
+              <span className="size-2 rounded-full" style={{ backgroundColor: `var(${m.colorVar})` }} />
+              {m.label}
+            </p>
+            <p className="text-lg font-bold tabular-nums">{pcts[i]}%</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-muted">
+        {MACROS.map((m, i) => (
+          <div
+            key={m.label}
+            style={{ width: `${(cals[i] / total) * 100}%`, backgroundColor: `var(${m.colorVar})` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * One day's diary body: calorie ring, macro bars, and the meal list. Rendered
  * inside the sliding pager, so it may mount without data yet (shows a
@@ -93,6 +154,9 @@ export function DiaryDayContent({
   onAnalyze,
   onAddMeal,
   onGoalChanged,
+  onComplete,
+  onUncomplete,
+  onViewAnalysis,
 }: {
   date: string;
   payload: DiaryPayloadDTO | null;
@@ -100,10 +164,31 @@ export function DiaryDayContent({
   onAddMeal: () => void;
   /** Refetch this day after an activity/exception write changes the goal. */
   onGoalChanged: () => void;
+  /** Mark the day complete (and run/save the AI analysis). */
+  onComplete: () => void;
+  /** Mark a completed day incomplete again. */
+  onUncomplete: () => void;
+  /** Show the saved analysis for a completed day. */
+  onViewAnalysis: () => void;
 }) {
   const [nutritionOpen, setNutritionOpen] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  // Macro-card view (⇄), persisted; the card only renders after client data
+  // loads, so reading localStorage on init causes no hydration mismatch.
+  const [macroView, setMacroView] = useState<MacroView>(() => {
+    if (typeof window === "undefined") return "consumed";
+    const saved = window.localStorage.getItem("mm-macro-view");
+    return saved === "remaining" || saved === "percent" ? saved : "consumed";
+  });
+
+  function cycleMacroView() {
+    setMacroView((v) => {
+      const next = MACRO_VIEWS[(MACRO_VIEWS.indexOf(v) + 1) % MACRO_VIEWS.length];
+      window.localStorage.setItem("mm-macro-view", next);
+      return next;
+    });
+  }
 
   if (!payload) {
     return <ListSkeleton rows={5} />;
@@ -238,28 +323,43 @@ export function DiaryDayContent({
         </Card>
       ) : null}
 
-      {/* Macros card */}
-      <Card className="p-4">
-        <div className="flex gap-4">
-          <MacroBar
-            label="Carbs"
-            value={totals.carbsG}
-            target={goal?.carbsG ?? null}
-            colorVar="--macro-carbs"
-          />
-          <MacroBar
-            label="Fat"
-            value={totals.fatG}
-            target={goal?.fatG ?? null}
-            colorVar="--macro-fat"
-          />
-          <MacroBar
-            label="Protein"
-            value={totals.proteinG}
-            target={goal?.proteinG ?? null}
-            colorVar="--macro-protein"
-          />
-        </div>
+      {/* Macros card — ⇄ cycles consumed / remaining / percent */}
+      <Card className="relative p-4">
+        <button
+          type="button"
+          aria-label="Change macro view"
+          onClick={cycleMacroView}
+          className="absolute top-3 right-3 flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeftRight className="size-3.5" aria-hidden />
+        </button>
+        {macroView === "percent" ? (
+          <MacroPercent totals={totals} />
+        ) : (
+          <div className="flex gap-4 pr-8">
+            <MacroBar
+              label="Carbs"
+              value={totals.carbsG}
+              target={goal?.carbsG ?? null}
+              colorVar="--macro-carbs"
+              mode={macroView}
+            />
+            <MacroBar
+              label="Fat"
+              value={totals.fatG}
+              target={goal?.fatG ?? null}
+              colorVar="--macro-fat"
+              mode={macroView}
+            />
+            <MacroBar
+              label="Protein"
+              value={totals.proteinG}
+              target={goal?.proteinG ?? null}
+              colorVar="--macro-protein"
+              mode={macroView}
+            />
+          </div>
+        )}
       </Card>
 
       {/* Day nutrition report: full micro totals + optional micro goal bars */}
@@ -304,6 +404,39 @@ export function DiaryDayContent({
         <Plus data-icon="inline-start" aria-hidden />
         Add meal bucket
       </Button>
+
+      {/* Complete the day — logs stay editable; saves an AI analysis */}
+      {payload.completedAt ? (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+            <CheckCircle2 className="size-4.5" aria-hidden />
+            Day completed
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            You can still log — it stays complete. Re-analyze to refresh the report.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {payload.analysis?.length ? (
+              <Button size="sm" variant="secondary" onClick={onViewAnalysis}>
+                <Sparkles data-icon="inline-start" aria-hidden />
+                View analysis
+              </Button>
+            ) : null}
+            <Button size="sm" variant="ghost" onClick={onComplete}>
+              <RotateCcw data-icon="inline-start" aria-hidden />
+              Re-analyze
+            </Button>
+            <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={onUncomplete}>
+              Mark incomplete
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button className="w-full" onClick={onComplete}>
+          <CheckCircle2 data-icon="inline-start" aria-hidden />
+          Complete diary
+        </Button>
+      )}
     </div>
   );
 }

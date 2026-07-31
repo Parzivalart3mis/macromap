@@ -114,6 +114,10 @@ export interface DiaryPayloadDTO {
   dayActivities: DayActivityDTO[] | null;
   /** One-off adjustments for this date; null if none. */
   dayOneOffs: DayOneOffDTO[] | null;
+  /** ISO time the day was marked complete, else null. */
+  completedAt: string | null;
+  /** Saved AI analysis for the day, else null. */
+  analysis: string[] | null;
 }
 
 export interface StoreThemeDTO {

@@ -192,6 +192,34 @@ function DiaryHome() {
     }
   }
 
+  // "Complete diary": mark the day done, generate + save its analysis, and show
+  // it. Idempotent — also used for "Re-analyze".
+  async function completeDay() {
+    setAnalyzing(true);
+    try {
+      const data = await apiFetch<{ insights: string[] }>("/api/diary/complete", {
+        method: "POST",
+        body: JSON.stringify({ date }),
+      });
+      setInsights(data.insights);
+      fetchDay(dateRef.current, true);
+    } catch (err) {
+      setInsights(null);
+      setAnalyzing(false);
+      toast.error(err instanceof Error ? err.message : "Could not complete the day");
+    }
+  }
+
+  async function uncompleteDay() {
+    try {
+      await apiFetch(`/api/diary/complete?date=${date}`, { method: "DELETE" });
+      toast.success("Marked incomplete");
+      fetchDay(dateRef.current, true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update");
+    }
+  }
+
   const activePayload = cache[date] ?? null;
 
   return (
@@ -310,6 +338,11 @@ function DiaryHome() {
                 onAnalyze={analyze}
                 onAddMeal={() => setNewMealOpen(true)}
                 onGoalChanged={() => fetchDay(date, true)}
+                onComplete={completeDay}
+                onUncomplete={uncompleteDay}
+                onViewAnalysis={() => {
+                  if (activePayload?.analysis) setInsights(activePayload.analysis);
+                }}
               />
             </motion.div>
           </AnimatePresence>

@@ -22,6 +22,8 @@ function payload(overrides: Partial<DiaryPayload> = {}): DiaryPayload {
     goalBreakdown: null,
     dayActivities: null,
     dayOneOffs: null,
+    completedAt: null,
+    analysis: null,
     ...overrides,
   };
 }

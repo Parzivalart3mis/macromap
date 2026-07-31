@@ -328,6 +328,9 @@ export const diaryDays = pgTable(
     goalProfileId: uuid("goal_profile_id").references(() => goalProfiles.id, {
       onDelete: "set null",
     }),
+    // Set when the user "completes" the day; the saved AI report for that day.
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    analysisJson: jsonb("analysis_json").$type<string[]>(),
   },
   (t) => [uniqueIndex("diary_days_user_date_idx").on(t.userId, t.date)],
 );

@@ -207,6 +207,10 @@ export interface DiaryPayload {
   dayActivities: DayActivity[] | null;
   /** One-off adjustments for this date; null if none. */
   dayOneOffs: DayOneOff[] | null;
+  /** ISO time the day was marked complete, else null. */
+  completedAt: string | null;
+  /** Saved AI analysis for the day, else null. */
+  analysis: string[] | null;
 }
 
 /** Calorie contribution of a macro delta (activities store no calorie field). */
@@ -471,5 +475,16 @@ export async function getDiaryPayload(
     dayOneOffs = resolved.dayOneOffs;
   }
 
-  return { date, meals, totals, goal, goalProfileId, goalBreakdown, dayActivities, dayOneOffs };
+  return {
+    date,
+    meals,
+    totals,
+    goal,
+    goalProfileId,
+    goalBreakdown,
+    dayActivities,
+    dayOneOffs,
+    completedAt: day?.completedAt ? day.completedAt.toISOString() : null,
+    analysis: day?.analysisJson ?? null,
+  };
 }
