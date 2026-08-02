@@ -1,10 +1,10 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, Ruler, Scale } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
+import { EmptyState, ErrorState, ListSkeleton, Spinner } from "@/components/async-states";
 import { MacroMeter } from "@/components/nutrition/macro-meter";
 import {
   CalorieHistoryChart,
@@ -82,7 +82,14 @@ function LogWeightDialog({
           />
         </div>
         <Button disabled={busy} onClick={save}>
-          {busy ? "Saving..." : "Save"}
+          {busy ? (
+            <>
+              <Spinner data-icon="inline-start" />
+              Saving…
+            </>
+          ) : (
+            "Save"
+          )}
         </Button>
       </DialogContent>
     </Dialog>
@@ -178,7 +185,14 @@ function LogMetricsDialog({
           />
         </div>
         <Button disabled={busy} onClick={save}>
-          {busy ? "Saving..." : "Save"}
+          {busy ? (
+            <>
+              <Spinner data-icon="inline-start" />
+              Saving…
+            </>
+          ) : (
+            "Save"
+          )}
         </Button>
       </DialogContent>
     </Dialog>
@@ -288,6 +302,7 @@ export default function ProgressPage() {
             <CardContent>
               {overview.weights.length === 0 ? (
                 <EmptyState
+                  icon={Scale}
                   title="No weight logged yet"
                   body="Log your first weigh-in to start the trend line."
                 />
@@ -313,6 +328,7 @@ export default function ProgressPage() {
             <CardContent>
               {overview.bodyMetrics.length === 0 ? (
                 <EmptyState
+                  icon={Ruler}
                   title="No measurements yet"
                   body="Track body fat and waist alongside your weight."
                 />

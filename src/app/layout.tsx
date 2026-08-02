@@ -1,6 +1,7 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata, Viewport } from "next";
 
+import { SplashScreen } from "@/components/shell/splash-screen";
 import { Toaster } from "@/components/ui/sonner";
 
 import "./globals.css";
@@ -76,6 +77,7 @@ export default function RootLayout({
                 "(function(){try{var t=localStorage.getItem('mm-theme');var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);var s=localStorage.getItem('mm-text-size');if(s==='large'){document.documentElement.style.fontSize='18px';}else if(s==='larger'){document.documentElement.style.fontSize='20px';}}catch(e){}})();",
             }}
           />
+          <SplashScreen />
           {children}
           <Toaster
             position="top-center"

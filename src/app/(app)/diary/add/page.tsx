@@ -687,6 +687,7 @@ function AddFoodView() {
           )}
           {barcodeMiss ? (
             <EmptyState
+              icon={ScanBarcode}
               title="Barcode not found"
               body="It is not in our database, Open Food Facts, or USDA."
               action={
@@ -732,6 +733,7 @@ function AddFoodView() {
             </>
           ) : (
             <EmptyState
+              icon={MicOff}
               title="Voice input not supported"
               body="This browser does not support the Web Speech API. Use Describe instead."
             />

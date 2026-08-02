@@ -1,6 +1,6 @@
 "use client";
 
-import { Pause, Play } from "lucide-react";
+import { Pause, Play, Timer } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -175,6 +175,7 @@ export default function FastingPage() {
             <CardContent>
               {completed.length === 0 ? (
                 <EmptyState
+                  icon={Timer}
                   title="No completed fasts"
                   body="Your finished fasts and durations will appear here."
                 />

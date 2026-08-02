@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Utensils,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -397,6 +398,7 @@ function MealDetail() {
           {/* Logged items */}
           {meal.entries.length === 0 ? (
             <EmptyState
+              icon={Utensils}
               title="Nothing logged in this meal"
               body="Add something with the button below."
             />

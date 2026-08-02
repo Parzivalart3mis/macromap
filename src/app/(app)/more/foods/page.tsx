@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { Apple, ChefHat, Search, UtensilsCrossed, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -157,6 +157,7 @@ function MyMealsRecipesFoodsView() {
               <ListSkeleton rows={4} />
             ) : recipes.length === 0 ? (
               <EmptyState
+                icon={ChefHat}
                 title={q ? "No recipes match" : "No recipes yet"}
                 body="Home dishes you create with a per-serving size show up here."
               />
@@ -181,6 +182,7 @@ function MyMealsRecipesFoodsView() {
               <ListSkeleton rows={3} />
             ) : meals.length === 0 ? (
               <EmptyState
+                icon={UtensilsCrossed}
                 title={q ? "No meals match" : "No saved meals yet"}
                 body="Save a logged meal as a template from its menu in the diary."
               />
@@ -211,6 +213,7 @@ function MyMealsRecipesFoodsView() {
               <ListSkeleton rows={4} />
             ) : myFoods.length === 0 ? (
               <EmptyState
+                icon={Apple}
                 title={q ? "No foods match" : "No foods yet"}
                 body="Foods you add to the shared database appear here."
                 action={

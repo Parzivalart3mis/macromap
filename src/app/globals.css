@@ -375,3 +375,122 @@ textarea,
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
 }
+
+/* ============================================================
+   Branded startup splash (see components/shell/splash-screen.tsx)
+   ============================================================ */
+#app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75rem;
+  background-color: var(--background);
+  /* Soft brand halo behind the mark. */
+  background-image: radial-gradient(
+    58% 46% at 50% 42%,
+    color-mix(in oklab, var(--primary), transparent 86%),
+    transparent 72%
+  );
+  opacity: 1;
+  transition: opacity 0.5s var(--ease-out-expo);
+  will-change: opacity;
+}
+#app-splash[data-hiding] {
+  opacity: 0;
+  pointer-events: none;
+}
+.app-splash__mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.95rem;
+}
+.app-splash__badge {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 1.3rem;
+  background-image: var(--gradient-brand);
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: var(--shadow-glow);
+}
+.app-splash__word {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+.app-splash__word-accent {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--primary), white 8%),
+    color-mix(in oklab, var(--primary), #22d3ee 55%)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.app-splash__progress {
+  position: relative;
+  width: 7rem;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground), transparent 90%);
+}
+.app-splash__progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--primary);
+  opacity: 0.35;
+}
+@keyframes splash-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes splash-glow {
+  0%,
+  100% {
+    box-shadow: 0 4px 20px -4px color-mix(in oklab, var(--primary), transparent 55%);
+  }
+  50% {
+    box-shadow: 0 10px 36px -2px color-mix(in oklab, var(--primary), transparent 28%);
+  }
+}
+@keyframes splash-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app-splash__mark {
+    animation: splash-in 0.7s var(--ease-out-expo) both;
+  }
+  .app-splash__badge {
+    animation: splash-glow 2.4s ease-in-out infinite;
+  }
+  .app-splash__progress::after {
+    width: 42%;
+    opacity: 1;
+    animation: splash-progress 1.15s var(--ease-out-expo) infinite;
+  }
+}
