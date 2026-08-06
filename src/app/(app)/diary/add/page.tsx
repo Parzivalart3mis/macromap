@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   Calculator,
+  Check,
   ChevronDown,
   ChevronRight,
   MapPin,
@@ -53,6 +54,15 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type Mode = null | "barcode" | "voice" | "text" | "quick";
 type LoggedVia = "search" | "barcode" | "voice" | "natural_language";
+
+/** One selected item queued for Multi-Add. */
+interface BatchEntry {
+  foodId: string;
+  quantity: number;
+  servingMultiplier: number;
+  servingText?: string;
+  label: string;
+}
 
 interface RecentItem {
   food: FoodDTO;
@@ -197,6 +207,9 @@ function QuickRow({
   onOpen,
   onQuickLog,
   editHref,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }: {
   title: string;
   subtitle: string;
@@ -206,13 +219,22 @@ function QuickRow({
   onOpen?: () => void;
   onQuickLog: () => void;
   editHref?: string;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
+  const mainClick = selectable ? onToggleSelect : onOpen;
   return (
-    <div className="card-lift flex items-center gap-2 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]">
+    <div
+      className={cn(
+        "card-lift flex items-center gap-2 rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]",
+        selectable && selected && "border-primary/60 bg-primary/5",
+      )}
+    >
       <button
         type="button"
-        onClick={onOpen}
-        disabled={!onOpen}
+        onClick={mainClick}
+        disabled={!mainClick}
         className="min-w-0 flex-1 text-left"
       >
         <span className="flex items-center gap-1.5">
@@ -228,7 +250,7 @@ function QuickRow({
           </span>
         ) : null}
       </button>
-      {editHref ? (
+      {editHref && !selectable ? (
         <Button
           variant="ghost"
           size="icon-sm"
@@ -241,16 +263,30 @@ function QuickRow({
           </Link>
         </Button>
       ) : null}
-      <Button
-        variant="secondary"
-        size="icon-sm"
-        aria-label={`Log ${title}`}
-        disabled={busy}
-        onClick={onQuickLog}
-        className="rounded-full text-primary"
-      >
-        <PlusCircle className="size-5" aria-hidden />
-      </Button>
+      {selectable ? (
+        <span
+          aria-hidden
+          className={cn(
+            "grid size-8 shrink-0 place-items-center rounded-full border transition-colors",
+            selected
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border text-transparent",
+          )}
+        >
+          <Check className="size-4" aria-hidden />
+        </span>
+      ) : (
+        <Button
+          variant="secondary"
+          size="icon-sm"
+          aria-label={`Log ${title}`}
+          disabled={busy}
+          onClick={onQuickLog}
+          className="rounded-full text-primary"
+        >
+          <PlusCircle className="size-5" aria-hidden />
+        </Button>
+      )}
     </div>
   );
 }
@@ -407,6 +443,10 @@ function AddFoodView() {
   // Logging
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
   const [quickAddBusy, setQuickAddBusy] = useState(false);
+  // Multi-Add: batch-select several foods and log them in one go.
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [selected, setSelected] = useState<Map<string, BatchEntry>>(new Map());
+  const [batchBusy, setBatchBusy] = useState(false);
 
   // Tapping a food opens the full-page log screen (with the unit selector).
   // `servings` pre-fills the count and `mult` restores the last-used unit
@@ -613,6 +653,67 @@ function AddFoodView() {
     }
   }
 
+  const foodToBatch = (food: FoodDTO): BatchEntry => ({
+    foodId: food.id,
+    quantity: 1,
+    servingMultiplier: 1,
+    servingText: nativeServingTextFor(food, 1),
+    label: food.name,
+  });
+  const recentToBatch = (item: RecentItem): BatchEntry => ({
+    foodId: item.food.id,
+    quantity: item.lastQuantity,
+    servingMultiplier: item.lastMultiplier,
+    servingText: item.lastServing ?? undefined,
+    label: item.food.name,
+  });
+
+  function toggleSelect(entry: BatchEntry) {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(entry.foodId)) next.delete(entry.foodId);
+      else next.set(entry.foodId, entry);
+      return next;
+    });
+  }
+
+  function exitMultiSelect() {
+    setMultiSelect(false);
+    setSelected(new Map());
+  }
+
+  async function batchLog() {
+    if (selected.size === 0) return;
+    setBatchBusy(true);
+    try {
+      const eatenTime = currentTimeIfToday(date);
+      await apiFetch("/api/diary/entries/batch", {
+        method: "POST",
+        body: JSON.stringify({
+          entries: [...selected.values()].map((entry) => ({
+            date,
+            mealName,
+            foodId: entry.foodId,
+            quantity: entry.quantity,
+            servingMultiplier: entry.servingMultiplier,
+            servingText: entry.servingText,
+            eatenTime,
+            loggedVia: "search",
+          })),
+        }),
+      });
+      haptic("success");
+      const count = selected.size;
+      toast.success(`Added ${count} ${count === 1 ? "item" : "items"} to ${mealName}`);
+      exitMultiSelect();
+      router.push(`/diary?date=${date}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add items");
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
   async function quickAddLog(input: {
     label: string;
     calories: number;
@@ -800,6 +901,17 @@ function AddFoodView() {
         Create food
       </Link>
     </div>
+  );
+
+  const selectToggle = (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="shrink-0 text-primary"
+      onClick={() => (multiSelect ? exitMultiSelect() : setMultiSelect(true))}
+    >
+      {multiSelect ? "Cancel" : "Select"}
+    </Button>
   );
 
   const modePanels = (
@@ -1060,7 +1172,8 @@ function AddFoodView() {
                     </Link>
                   ) : null}
                   {results.length > 0 ? (
-                    <div className="-mx-1 flex flex-wrap items-center gap-1.5 px-1">
+                    <div className="-mx-1 flex items-start justify-between gap-2 px-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {(
                         [
                           ["all", "All"],
@@ -1104,6 +1217,8 @@ function AddFoodView() {
                         </button>
                       ))}
                     </div>
+                      {selectToggle}
+                    </div>
                   ) : null}
                   {displayedResults.length > 0 ? (
                     <div className="stagger-children space-y-2">
@@ -1117,6 +1232,9 @@ function AddFoodView() {
                           busy={quickBusy === food.id}
                           onOpen={() => openLog(food.id, "search")}
                           onQuickLog={() => quickLog(food, 1)}
+                          selectable={multiSelect}
+                          selected={selected.has(food.id)}
+                          onToggleSelect={() => toggleSelect(foodToBatch(food))}
                         />
                       ))}
                     </div>
@@ -1177,9 +1295,12 @@ function AddFoodView() {
 
                 <TabsContent value="history" className="pt-3">
                   {!filtering ? (
-                    <p className="mb-2 px-1 text-lg font-extrabold tracking-tight">
-                      Recently logged
-                    </p>
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="px-1 text-lg font-extrabold tracking-tight">
+                        Recently logged
+                      </p>
+                      {recentFiltered && recentFiltered.length > 0 ? selectToggle : null}
+                    </div>
                   ) : null}
                   {recentFiltered === null ? (
                     <ListSkeleton rows={4} />
@@ -1206,6 +1327,9 @@ function AddFoodView() {
                             openLog(item.food.id, "search", item.lastQuantity, item.lastMultiplier)
                           }
                           onQuickLog={() => quickLog(item)}
+                          selectable={multiSelect}
+                          selected={selected.has(item.food.id)}
+                          onToggleSelect={() => toggleSelect(recentToBatch(item))}
                         />
                       ))}
                     </div>
@@ -1214,9 +1338,10 @@ function AddFoodView() {
 
                 <TabsContent value="frequent" className="pt-3">
                   {!filtering ? (
-                    <p className="mb-2 px-1 text-lg font-extrabold tracking-tight">
-                      Frequent
-                    </p>
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="px-1 text-lg font-extrabold tracking-tight">Frequent</p>
+                      {frequentFiltered && frequentFiltered.length > 0 ? selectToggle : null}
+                    </div>
                   ) : null}
                   {frequentFiltered === null ? (
                     <ListSkeleton rows={4} />
@@ -1244,6 +1369,9 @@ function AddFoodView() {
                             openLog(item.food.id, "search", item.lastQuantity, item.lastMultiplier)
                           }
                           onQuickLog={() => quickLog(item)}
+                          selectable={multiSelect}
+                          selected={selected.has(item.food.id)}
+                          onToggleSelect={() => toggleSelect(recentToBatch(item))}
                         />
                       ))}
                     </div>
@@ -1342,6 +1470,26 @@ function AddFoodView() {
           </>
         )}
       </div>
+
+      {/* Multi-Add action bar */}
+      {multiSelect && selected.size > 0 ? (
+        <div
+          className="fixed inset-x-0 z-40 mx-auto max-w-2xl px-4"
+          style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+        >
+          <div className="glass flex items-center gap-3 rounded-2xl border p-2 pl-4 shadow-[var(--shadow-lift)]">
+            <span className="flex-1 text-sm font-semibold tabular-nums">
+              {selected.size} selected
+            </span>
+            <Button variant="ghost" size="sm" onClick={exitMultiSelect}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={batchBusy} onClick={batchLog}>
+              {batchBusy ? "Adding…" : `Add to ${mealName}`}
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -81,3 +81,9 @@ export const logSavedMealSchema = z.object({
 });
 
 export type CreateDiaryEntryInput = z.infer<typeof createDiaryEntrySchema>;
+
+/** Multi-Add: log several entries in one request. */
+export const batchDiaryEntriesSchema = z.object({
+  entries: z.array(createDiaryEntrySchema).min(1).max(50),
+});
+export type BatchDiaryEntriesInput = z.infer<typeof batchDiaryEntriesSchema>;
