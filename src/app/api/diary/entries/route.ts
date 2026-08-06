@@ -20,7 +20,12 @@ export async function POST(request: Request) {
     await enforceRateLimit("diaryWrite", userId);
     const input = await parseBody(request, createDiaryEntrySchema);
 
-    const source = await resolveEntrySource(userId, input.foodId, input.customStoreOrderId);
+    const source = await resolveEntrySource(
+      userId,
+      input.foodId,
+      input.customStoreOrderId,
+      input.quickAdd,
+    );
     const day = await getOrCreateDiaryDay(userId, input.date);
     const meal = await getOrCreateMeal(day.id, input.mealName);
     const snapshot = buildEntrySnapshot(

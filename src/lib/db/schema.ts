@@ -36,6 +36,7 @@ export const loggedViaEnum = pgEnum("logged_via", [
   "natural_language",
   "store_builder",
   "saved_meal",
+  "quick_add",
 ]);
 
 export const users = pgTable("users", {

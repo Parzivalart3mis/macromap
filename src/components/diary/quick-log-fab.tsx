@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, Pencil, Plus, ScanBarcode, Search } from "lucide-react";
+import { Calculator, Mic, Pencil, Plus, ScanBarcode, Search } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -40,10 +40,17 @@ const ACTIONS = [
   },
   {
     key: "text",
-    label: "Quick add",
-    desc: "Describe a meal in plain text",
+    label: "Describe",
+    desc: "Type a meal in plain text",
     icon: Pencil,
     mode: "text",
+  },
+  {
+    key: "quick",
+    label: "Quick add",
+    desc: "Log calories without a food",
+    icon: Calculator,
+    mode: "quick",
   },
 ] as const;
 

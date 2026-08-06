@@ -9,6 +9,16 @@ export const createDiaryEntrySchema = z
     mealName: z.string().min(1).max(40),
     foodId: z.uuid().optional(),
     customStoreOrderId: z.uuid().optional(),
+    /** Foodless "Quick add": raw calories + optional macros, no catalog entry. */
+    quickAdd: z
+      .object({
+        label: z.string().min(1).max(60).default("Quick add"),
+        calories: z.number().nonnegative().max(20000),
+        proteinG: z.number().nonnegative().max(2000).default(0),
+        carbsG: z.number().nonnegative().max(2000).default(0),
+        fatG: z.number().nonnegative().max(2000).default(0),
+      })
+      .optional(),
     quantity: z.number().positive(),
     servingMultiplier: z.number().positive().default(1),
     servingText: z.string().max(60).optional(),
@@ -20,11 +30,14 @@ export const createDiaryEntrySchema = z
       "natural_language",
       "store_builder",
       "saved_meal",
+      "quick_add",
     ]),
   })
-  .refine((value) => Boolean(value.foodId) !== Boolean(value.customStoreOrderId), {
-    message: "Provide exactly one of foodId or customStoreOrderId",
-  });
+  .refine(
+    (value) =>
+      [value.foodId, value.customStoreOrderId, value.quickAdd].filter(Boolean).length === 1,
+    { message: "Provide exactly one of foodId, customStoreOrderId, or quickAdd" },
+  );
 
 export const updateDiaryEntrySchema = z.object({
   quantity: z.number().positive().optional(),

@@ -80,13 +80,25 @@ export interface EntrySource {
     nutritionSnapshotJson: NutritionSnapshot;
     storeName: string | null;
   };
+  /** Foodless Quick-Add: raw macros the user typed in. */
+  raw?: {
+    label: string;
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  };
 }
 
 export async function resolveEntrySource(
   userId: string,
   foodId?: string,
   customStoreOrderId?: string,
+  quickAdd?: EntrySource["raw"],
 ): Promise<EntrySource> {
+  if (quickAdd) {
+    return { raw: quickAdd };
+  }
   if (foodId) {
     const [food] = await db.select().from(foods).where(eq(foods.id, foodId)).limit(1);
     if (!food) throw new ApiError("not_found", "Food not found", 404);
@@ -142,6 +154,19 @@ export function buildEntrySnapshot(
       label: source.order.name,
       serving,
       brand: source.order.storeName ?? undefined,
+    };
+  }
+  if (source.raw) {
+    const base: NutritionSnapshot = {
+      calories: source.raw.calories,
+      proteinG: source.raw.proteinG,
+      carbsG: source.raw.carbsG,
+      fatG: source.raw.fatG,
+    };
+    return {
+      ...roundNutrition(scaleNutrition(base, factor)),
+      label: source.raw.label,
+      serving,
     };
   }
   throw new ApiError("invalid_request", "Entry source missing", 400);

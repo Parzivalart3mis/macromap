@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  Calculator,
   ChevronDown,
   ChevronRight,
   MapPin,
@@ -9,6 +10,7 @@ import {
   MicOff,
   Pencil,
   PlusCircle,
+  Repeat,
   ScanBarcode,
   Search,
   Type,
@@ -49,7 +51,7 @@ import type {
 const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-type Mode = null | "barcode" | "voice" | "text";
+type Mode = null | "barcode" | "voice" | "text" | "quick";
 type LoggedVia = "search" | "barcode" | "voice" | "natural_language";
 
 interface RecentItem {
@@ -96,6 +98,96 @@ function recentSubtitle({ food, lastQuantity, lastMultiplier, lastServing }: Rec
 }
 
 /** MFP-style row: tap the body for the serving picker, tap + to log instantly. */
+/** Foodless "Quick add": type calories (+ optional macros) and drop it in. */
+function QuickAddPanel({
+  mealName,
+  busy,
+  onSubmit,
+}: {
+  mealName: string;
+  busy: boolean;
+  onSubmit: (value: {
+    label: string;
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  }) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [calories, setCalories] = useState("");
+  const [protein, setProtein] = useState("");
+  const [carbs, setCarbs] = useState("");
+  const [fat, setFat] = useState("");
+  const cal = Number(calories);
+  const valid = Number.isFinite(cal) && cal > 0;
+
+  const macroInputs: Array<[string, string, (v: string) => void]> = [
+    ["Protein", protein, setProtein],
+    ["Carbs", carbs, setCarbs],
+    ["Fat", fat, setFat],
+  ];
+
+  return (
+    <div className="animate-fade-up space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Log calories and macros without picking a food — for when you don&apos;t have the details.
+      </p>
+      <Input
+        placeholder="Description (optional)"
+        value={label}
+        maxLength={60}
+        onChange={(event) => setLabel(event.target.value)}
+      />
+      <div>
+        <label className="mb-1 block px-1 text-xs font-medium text-muted-foreground">
+          Calories
+        </label>
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          placeholder="0"
+          value={calories}
+          onChange={(event) => setCalories(event.target.value)}
+        />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {macroInputs.map(([macroLabel, value, setValue]) => (
+          <div key={macroLabel}>
+            <label className="mb-1 block px-1 text-xs font-medium text-muted-foreground">
+              {macroLabel} (g)
+            </label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              placeholder="0"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+            />
+          </div>
+        ))}
+      </div>
+      <Button
+        className="w-full"
+        disabled={!valid || busy}
+        onClick={() =>
+          onSubmit({
+            label: label.trim() || "Quick add",
+            calories: cal,
+            proteinG: Number(protein) || 0,
+            carbsG: Number(carbs) || 0,
+            fatG: Number(fat) || 0,
+          })
+        }
+      >
+        {busy ? "Adding…" : `Add to ${mealName}`}
+      </Button>
+    </div>
+  );
+}
+
 function QuickRow({
   title,
   subtitle,
@@ -310,6 +402,7 @@ function AddFoodView() {
 
   // Logging
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
+  const [quickAddBusy, setQuickAddBusy] = useState(false);
 
   // Tapping a food opens the full-page log screen (with the unit selector).
   // `servings` pre-fills the count and `mult` restores the last-used unit
@@ -324,7 +417,7 @@ function AddFoodView() {
   // Modes — a `mode` query param (from the diary FAB) opens straight into one.
   const [mode, setMode] = useState<Mode>(() => {
     const m = searchParams.get("mode");
-    return m === "barcode" || m === "voice" || m === "text" ? m : null;
+    return m === "barcode" || m === "voice" || m === "text" || m === "quick" ? m : null;
   });
   const [barcodeValue, setBarcodeValue] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -341,6 +434,7 @@ function AddFoodView() {
 
   // Tabs data
   const [recent, setRecent] = useState<RecentItem[] | null>(null);
+  const [frequent, setFrequent] = useState<RecentItem[] | null>(null);
   const [savedMeals, setSavedMeals] = useState<SavedMealDTO[] | null>(null);
   const [myFoods, setMyFoods] = useState<FoodDTO[] | null>(null);
   const [stores, setStores] = useState<StoreDTO[]>([]);
@@ -356,6 +450,11 @@ function AddFoodView() {
       )
         .then((data) => setRecent(data.recent))
         .catch(() => setRecent([]));
+      apiFetch<{ frequent: RecentItem[] }>(
+        `/api/diary/frequent?meal=${encodeURIComponent(mealName)}`,
+      )
+        .then((data) => setFrequent(data.frequent))
+        .catch(() => setFrequent([]));
       apiFetch<{ savedMeals: SavedMealDTO[] }>("/api/saved-meals")
         .then((data) => setSavedMeals(data.savedMeals))
         .catch(() => setSavedMeals([]));
@@ -498,6 +597,37 @@ function AddFoodView() {
     }
   }
 
+  async function quickAddLog(input: {
+    label: string;
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+  }) {
+    setQuickAddBusy(true);
+    try {
+      await apiFetch("/api/diary/entries", {
+        method: "POST",
+        body: JSON.stringify({
+          date,
+          mealName,
+          quickAdd: input,
+          quantity: 1,
+          servingMultiplier: 1,
+          eatenTime: currentTimeIfToday(date),
+          loggedVia: "quick_add",
+        }),
+      });
+      haptic("success");
+      toast.success(`Added to ${mealName}`);
+      router.push(`/diary?date=${date}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Quick add failed");
+    } finally {
+      setQuickAddBusy(false);
+    }
+  }
+
   async function importExternal(result: ExternalFoodResultDTO, index: number) {
     setImportingIndex(index);
     try {
@@ -588,13 +718,13 @@ function AddFoodView() {
   const QUICK_ACTIONS = [
     {
       key: "barcode" as const,
-      label: "Barcode scan",
+      label: "Scan",
       icon: ScanBarcode,
       onClick: () => setMode(mode === "barcode" ? null : "barcode"),
     },
     {
       key: "voice" as const,
-      label: "Voice log",
+      label: "Voice",
       icon: Mic,
       onClick: () => setMode(mode === "voice" ? null : "voice"),
     },
@@ -604,6 +734,12 @@ function AddFoodView() {
       icon: Type,
       onClick: () => setMode(mode === "text" ? null : "text"),
     },
+    {
+      key: "quick" as const,
+      label: "Quick add",
+      icon: Calculator,
+      onClick: () => setMode(mode === "quick" ? null : "quick"),
+    },
   ];
 
   // While typing (before submit), the tabs stay and filter locally by the query.
@@ -611,12 +747,13 @@ function AddFoodView() {
   const filtering = q.length > 0 && !submitted;
   const matchesQuery = (name: string) => !q || name.toLowerCase().includes(q);
   const recentFiltered = recent?.filter((item) => matchesQuery(item.food.name)) ?? null;
+  const frequentFiltered = frequent?.filter((item) => matchesQuery(item.food.name)) ?? null;
   const mealsFiltered = savedMeals?.filter((meal) => matchesQuery(meal.name)) ?? null;
   const recipesFiltered = myFoods?.filter((food) => food.isRecipe && matchesQuery(food.name)) ?? null;
   const foodsFiltered = myFoods?.filter((food) => !food.isRecipe && matchesQuery(food.name)) ?? null;
 
   const quickActionsRow = (
-    <div className="grid grid-cols-4 gap-2">
+    <div className="grid grid-cols-5 gap-2">
       {QUICK_ACTIONS.map((action) => (
         <button
           key={action.key}
@@ -633,10 +770,10 @@ function AddFoodView() {
       ))}
       <Link
         href={`/foods/new`}
-        className="card-lift flex flex-col items-center gap-1.5 rounded-2xl border bg-card px-1 py-3 text-xs font-semibold text-primary shadow-[var(--shadow-soft)]"
+        className="card-lift flex flex-col items-center gap-1.5 rounded-2xl border bg-card px-1 py-3 text-center text-xs font-semibold text-primary shadow-[var(--shadow-soft)]"
       >
         <PlusCircle className="size-5" aria-hidden />
-        Quick add
+        Create food
       </Link>
     </div>
   );
@@ -757,6 +894,10 @@ function AddFoodView() {
             {parsing ? "Parsing..." : "Parse and review"}
           </Button>
         </div>
+      ) : null}
+
+      {mode === "quick" ? (
+        <QuickAddPanel mealName={mealName} busy={quickAddBusy} onSubmit={quickAddLog} />
       ) : null}
     </>
   );
@@ -945,10 +1086,11 @@ function AddFoodView() {
             ) : (
               <Tabs defaultValue="history">
                 <TabsList className="w-full">
-                  <TabsTrigger value="history">History</TabsTrigger>
-                  <TabsTrigger value="meals">My Meals</TabsTrigger>
-                  <TabsTrigger value="recipes">My Recipes</TabsTrigger>
-                  <TabsTrigger value="foods">My Foods</TabsTrigger>
+                  <TabsTrigger value="history">Recent</TabsTrigger>
+                  <TabsTrigger value="frequent">Frequent</TabsTrigger>
+                  <TabsTrigger value="meals">Meals</TabsTrigger>
+                  <TabsTrigger value="recipes">Recipes</TabsTrigger>
+                  <TabsTrigger value="foods">Foods</TabsTrigger>
                 </TabsList>
 
                 {/* Barcode / voice / describe / quick add — hidden while filtering */}
@@ -979,6 +1121,44 @@ function AddFoodView() {
                   ) : (
                     <div className="stagger-children space-y-2">
                       {recentFiltered.map((item) => (
+                        <QuickRow
+                          key={item.food.id}
+                          title={item.food.name}
+                          subtitle={recentSubtitle(item)}
+                          description={item.food.description}
+                          verified={item.food.isVerified}
+                          busy={quickBusy === item.food.id}
+                          onOpen={() =>
+                            openLog(item.food.id, "search", item.lastQuantity, item.lastMultiplier)
+                          }
+                          onQuickLog={() => quickLog(item)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="frequent" className="pt-3">
+                  {!filtering ? (
+                    <p className="mb-2 px-1 text-lg font-extrabold tracking-tight">
+                      Frequent
+                    </p>
+                  ) : null}
+                  {frequentFiltered === null ? (
+                    <ListSkeleton rows={4} />
+                  ) : frequentFiltered.length === 0 ? (
+                    <EmptyState
+                      icon={Repeat}
+                      title={filtering ? "No matches in your frequents" : "No frequent foods yet"}
+                      body={
+                        filtering
+                          ? "Try the search key to look up the shared database."
+                          : "Log a food a few times and it will surface here for one-tap adding."
+                      }
+                    />
+                  ) : (
+                    <div className="stagger-children space-y-2">
+                      {frequentFiltered.map((item) => (
                         <QuickRow
                           key={item.food.id}
                           title={item.food.name}
