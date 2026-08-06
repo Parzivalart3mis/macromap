@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ListSkeleton } from "@/components/async-states";
@@ -395,9 +395,13 @@ function AddFoodView() {
   const [results, setResults] = useState<FoodDTO[]>([]);
   const [externalResults, setExternalResults] = useState<ExternalFoodResultDTO[]>([]);
   const [importingIndex, setImportingIndex] = useState<number | null>(null);
-  const [searching, setSearching] = useState(false);
-  // Typing filters the tabs; the combined DB/web search runs only once the user
-  // submits (keyboard search key / magnifier). `submitted` gates that view.
+  const [searching, setSearching] = useState(
+    () => (searchParams.get("q") ?? "").trim().length >= 2,
+  );
+  const [resultFilter, setResultFilter] = useState<"all" | "verified">("all");
+  const [resultSort, setResultSort] = useState<"match" | "calories" | "protein">("match");
+  // `submitted` gates the search-results view (search-as-you-type sets it once
+  // the query reaches 2 chars).
   const [submitted, setSubmitted] = useState(() => (searchParams.get("q") ?? "").trim().length >= 2);
 
   // Logging
@@ -489,47 +493,59 @@ function AddFoodView() {
     router.replace(`/diary/add?${params.toString()}`, { scroll: false });
   }
 
+  // Guards against out-of-order responses while typing: only the latest
+  // request's results are applied.
+  const searchSeq = useRef(0);
+
   async function fetchResults(value: string) {
+    const seq = ++searchSeq.current;
     setSearching(true);
     try {
       const data = await apiFetch<{
         foods: FoodDTO[];
         external: ExternalFoodResultDTO[];
       }>(`/api/foods/search?q=${encodeURIComponent(value.trim())}`);
+      if (seq !== searchSeq.current) return;
       setResults(data.foods);
       setExternalResults(data.external ?? []);
     } catch {
-      toast.error("Search failed");
+      if (seq === searchSeq.current) toast.error("Search failed");
     } finally {
-      setSearching(false);
+      if (seq === searchSeq.current) setSearching(false);
     }
   }
 
-  // Re-run a query restored from the URL on mount (returning from a food page).
+  // Search-as-you-type: schedule the combined DB+web search shortly after the
+  // query settles. State transitions live in runSearch so this effect only
+  // schedules/cancels the debounced fetch (and runs once for a URL-restored
+  // query on mount).
   useEffect(() => {
-    const restored = searchParams.get("q") ?? "";
-    if (restored.trim().length >= 2) {
-      fetchResults(restored);
-    }
+    if (query.trim().length < 2) return;
+    const handle = setTimeout(() => void fetchResults(query.trim()), 250);
+    return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [query]);
 
-  // Typing only filters the tabs; leaving the query returns to the tab view.
   function runSearch(value: string) {
     setQuery(value);
-    setSubmitted(false);
     syncUrl(value, mealName);
-    if (value.trim().length < 2) {
+    if (value.trim().length >= 2) {
+      setSubmitted(true);
+      setSearching(true);
+    } else {
+      searchSeq.current++; // discard any in-flight result
+      setSubmitted(false);
+      setSearching(false);
       setResults([]);
       setExternalResults([]);
     }
   }
 
-  // Pressing the keyboard search key / magnifier runs the combined DB+web search.
+  // Pressing the keyboard search key / magnifier searches immediately.
   function submitSearch() {
     if (query.trim().length < 2) return;
-    setSubmitted(true);
-    fetchResults(query);
+    setSearching(true);
+    void fetchResults(query);
   }
 
   // A store whose name matches the query gets a "browse the menu" card.
@@ -751,6 +767,14 @@ function AddFoodView() {
   const mealsFiltered = savedMeals?.filter((meal) => matchesQuery(meal.name)) ?? null;
   const recipesFiltered = myFoods?.filter((food) => food.isRecipe && matchesQuery(food.name)) ?? null;
   const foodsFiltered = myFoods?.filter((food) => !food.isRecipe && matchesQuery(food.name)) ?? null;
+
+  // Client-side filter + sort over the server-ranked results.
+  const displayedResults = (() => {
+    const filtered = resultFilter === "verified" ? results.filter((f) => f.isVerified) : results;
+    if (resultSort === "calories") return [...filtered].sort((a, b) => a.calories - b.calories);
+    if (resultSort === "protein") return [...filtered].sort((a, b) => b.proteinG - a.proteinG);
+    return filtered;
+  })();
 
   const quickActionsRow = (
     <div className="grid grid-cols-5 gap-2">
@@ -1036,8 +1060,54 @@ function AddFoodView() {
                     </Link>
                   ) : null}
                   {results.length > 0 ? (
+                    <div className="-mx-1 flex flex-wrap items-center gap-1.5 px-1">
+                      {(
+                        [
+                          ["all", "All"],
+                          ["verified", "Verified"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setResultFilter(key)}
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                            resultFilter === key
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+                      {(
+                        [
+                          ["match", "Best match"],
+                          ["calories", "Fewest cal"],
+                          ["protein", "Most protein"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setResultSort(key)}
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                            resultSort === key
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {displayedResults.length > 0 ? (
                     <div className="stagger-children space-y-2">
-                      {results.map((food) => (
+                      {displayedResults.map((food) => (
                         <QuickRow
                           key={food.id}
                           title={food.name}
@@ -1050,6 +1120,10 @@ function AddFoodView() {
                         />
                       ))}
                     </div>
+                  ) : results.length > 0 ? (
+                    <p className="px-1 text-sm text-muted-foreground">
+                      No verified matches — switch to All to see every result.
+                    </p>
                   ) : null}
                   {externalResults.length > 0 ? (
                     <div className="space-y-2">
