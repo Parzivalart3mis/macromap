@@ -3,9 +3,11 @@
 import {
   ArrowLeft,
   Calculator,
+  Camera,
   Check,
   ChevronDown,
   ChevronRight,
+  Link2,
   MapPin,
   Mic,
   MicOff,
@@ -38,6 +40,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useVoiceLogging } from "@/hooks/useVoiceLogging";
 import { apiFetch } from "@/lib/client/fetcher";
 import { haptic } from "@/lib/client/haptics";
+import { imageToBase64 } from "@/lib/client/image";
 import { todayISO } from "@/lib/dates";
 import { nativeServingLabel, nativeServingTextFor } from "@/lib/units";
 import { cn } from "@/lib/utils";
@@ -52,7 +55,18 @@ import type {
 const MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-type Mode = null | "barcode" | "voice" | "text" | "quick";
+type Mode = null | "barcode" | "voice" | "text" | "quick" | "photo";
+
+/** One AI-estimated food recognized from a meal photo. */
+interface MealScanItem {
+  name: string;
+  quantity: number;
+  unit?: string | null;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
 type LoggedVia = "search" | "barcode" | "voice" | "natural_language";
 
 /** One selected item queued for Multi-Add. */
@@ -108,6 +122,154 @@ function recentSubtitle({ food, lastQuantity, lastMultiplier, lastServing }: Rec
 }
 
 /** MFP-style row: tap the body for the serving picker, tap + to log instantly. */
+/** Meal Scan: photograph a plate → review AI-estimated foods → log them. */
+function MealScanPanel({
+  mealName,
+  date,
+  onDone,
+}: {
+  mealName: string;
+  date: string;
+  onDone: () => void;
+}) {
+  const [rows, setRows] = useState<Array<{ selected: boolean; item: MealScanItem }> | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [logging, setLogging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    setScanning(true);
+    try {
+      const { data, mimeType } = await imageToBase64(file);
+      const res = await apiFetch<{ items: MealScanItem[] }>("/api/foods/meal-scan", {
+        method: "POST",
+        body: JSON.stringify({ image: data, mimeType }),
+      });
+      if (res.items.length === 0) {
+        toast.error("No foods recognized — try another photo");
+        return;
+      }
+      setRows(res.items.map((item) => ({ selected: true, item })));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not read that photo");
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function logSelected() {
+    const chosen = (rows ?? []).filter((row) => row.selected).map((row) => row.item);
+    if (chosen.length === 0) return;
+    setLogging(true);
+    try {
+      await apiFetch("/api/diary/entries/batch", {
+        method: "POST",
+        body: JSON.stringify({
+          entries: chosen.map((item) => ({
+            date,
+            mealName,
+            quickAdd: {
+              label: item.unit ? `${item.name} (${item.quantity} ${item.unit})` : item.name,
+              calories: item.calories,
+              proteinG: item.proteinG,
+              carbsG: item.carbsG,
+              fatG: item.fatG,
+            },
+            quantity: 1,
+            servingMultiplier: 1,
+            eatenTime: currentTimeIfToday(date),
+            loggedVia: "quick_add",
+          })),
+        }),
+      });
+      haptic("success");
+      toast.success(`Logged ${chosen.length} ${chosen.length === 1 ? "item" : "items"} to ${mealName}`);
+      onDone();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not log items");
+    } finally {
+      setLogging(false);
+    }
+  }
+
+  const selectedCount = rows?.filter((row) => row.selected).length ?? 0;
+
+  return (
+    <div className="animate-fade-up space-y-3">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(event) => onFile(event.target.files?.[0])}
+      />
+      {rows === null ? (
+        <>
+          <p className="text-sm text-muted-foreground">
+            Snap a photo of your plate and we&apos;ll estimate each food.
+          </p>
+          <Button className="w-full" disabled={scanning} onClick={() => inputRef.current?.click()}>
+            {scanning ? "Reading photo…" : "Take or choose a photo"}
+          </Button>
+        </>
+      ) : (
+        <>
+          <p className="px-1 text-xs text-muted-foreground">
+            AI estimates — uncheck anything wrong and review before logging.
+          </p>
+          <ul className="divide-y rounded-2xl border bg-card">
+            {rows.map((row, index) => (
+              <li key={index} className="flex items-center gap-3 px-3 py-2">
+                <input
+                  type="checkbox"
+                  className="size-5 accent-[var(--primary)]"
+                  checked={row.selected}
+                  onChange={(event) =>
+                    setRows((prev) =>
+                      (prev ?? []).map((r, i) =>
+                        i === index ? { ...r, selected: event.target.checked } : r,
+                      ),
+                    )
+                  }
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">
+                    {row.item.name}
+                    {row.item.unit ? (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {row.item.quantity} {row.item.unit}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {Math.round(row.item.calories)} kcal · {Math.round(row.item.proteinG)}p{" "}
+                    {Math.round(row.item.carbsG)}c {Math.round(row.item.fatG)}f
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setRows(null)}>
+              Retake
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={logging || selectedCount === 0}
+              onClick={logSelected}
+            >
+              {logging ? "Adding…" : `Add ${selectedCount} to ${mealName}`}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** Foodless "Quick add": type calories (+ optional macros) and drop it in. */
 function QuickAddPanel({
   mealName,
@@ -447,6 +609,8 @@ function AddFoodView() {
   const [multiSelect, setMultiSelect] = useState(false);
   const [selected, setSelected] = useState<Map<string, BatchEntry>>(new Map());
   const [batchBusy, setBatchBusy] = useState(false);
+  const [recipeUrl, setRecipeUrl] = useState("");
+  const [importingRecipe, setImportingRecipe] = useState(false);
 
   // Tapping a food opens the full-page log screen (with the unit selector).
   // `servings` pre-fills the count and `mult` restores the last-used unit
@@ -461,7 +625,9 @@ function AddFoodView() {
   // Modes — a `mode` query param (from the diary FAB) opens straight into one.
   const [mode, setMode] = useState<Mode>(() => {
     const m = searchParams.get("mode");
-    return m === "barcode" || m === "voice" || m === "text" || m === "quick" ? m : null;
+    return m === "barcode" || m === "voice" || m === "text" || m === "quick" || m === "photo"
+      ? m
+      : null;
   });
   const [barcodeValue, setBarcodeValue] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -649,6 +815,30 @@ function AddFoodView() {
       toast.error(error instanceof Error ? error.message : "Logging failed");
     } finally {
       setQuickBusy(null);
+    }
+  }
+
+  async function importRecipe() {
+    const url = recipeUrl.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      toast.error("Paste a recipe link (https://…)");
+      return;
+    }
+    setImportingRecipe(true);
+    try {
+      const { food } = await apiFetch<{ food: { id: string; name: string } }>(
+        "/api/foods/recipe-import",
+        { method: "POST", body: JSON.stringify({ url }) },
+      );
+      haptic("success");
+      toast.success(`Imported "${food.name}" to My Recipes`);
+      setRecipeUrl("");
+      const data = await apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine");
+      setMyFoods(data.foods);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not import that recipe");
+    } finally {
+      setImportingRecipe(false);
     }
   }
 
@@ -856,6 +1046,12 @@ function AddFoodView() {
       icon: Calculator,
       onClick: () => setMode(mode === "quick" ? null : "quick"),
     },
+    {
+      key: "photo" as const,
+      label: "Photo",
+      icon: Camera,
+      onClick: () => setMode(mode === "photo" ? null : "photo"),
+    },
   ];
 
   // While typing (before submit), the tabs stay and filter locally by the query.
@@ -877,7 +1073,7 @@ function AddFoodView() {
   })();
 
   const quickActionsRow = (
-    <div className="grid grid-cols-5 gap-2">
+    <div className="grid grid-cols-3 gap-2">
       {QUICK_ACTIONS.map((action) => (
         <button
           key={action.key}
@@ -1033,6 +1229,14 @@ function AddFoodView() {
 
       {mode === "quick" ? (
         <QuickAddPanel mealName={mealName} busy={quickAddBusy} onSubmit={quickAddLog} />
+      ) : null}
+
+      {mode === "photo" ? (
+        <MealScanPanel
+          mealName={mealName}
+          date={date}
+          onDone={() => router.push(`/diary?date=${date}`)}
+        />
       ) : null}
     </>
   );
@@ -1406,7 +1610,37 @@ function AddFoodView() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="recipes" className="pt-3">
+                <TabsContent value="recipes" className="space-y-3 pt-3">
+                  {!filtering ? (
+                    <div className="rounded-2xl border bg-card p-3 shadow-[var(--shadow-soft)]">
+                      <p className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold">
+                        <Link2 className="size-4 text-primary" aria-hidden />
+                        Import from a link
+                      </p>
+                      <div className="flex gap-2">
+                        <Input
+                          type="url"
+                          inputMode="url"
+                          placeholder="Paste a recipe URL"
+                          value={recipeUrl}
+                          onChange={(event) => setRecipeUrl(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") importRecipe();
+                          }}
+                        />
+                        <Button
+                          className="shrink-0"
+                          disabled={importingRecipe || recipeUrl.trim().length < 4}
+                          onClick={importRecipe}
+                        >
+                          {importingRecipe ? "Importing…" : "Import"}
+                        </Button>
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        Macros are AI-estimated from the ingredients — review after importing.
+                      </p>
+                    </div>
+                  ) : null}
                   {recipesFiltered === null ? (
                     <ListSkeleton rows={3} />
                   ) : recipesFiltered.length === 0 ? (
