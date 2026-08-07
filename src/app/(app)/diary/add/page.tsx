@@ -563,7 +563,6 @@ function AddFoodView() {
     if (query.trim().length < 2) return;
     const handle = setTimeout(() => void fetchResults(query.trim()), 250);
     return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   function runSearch(value: string) {

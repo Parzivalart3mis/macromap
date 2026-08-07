@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "framer-motion";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Flame } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Flame } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -39,6 +39,142 @@ const slideVariants = {
   exit: (dir: number) => ({ x: dir >= 0 ? "-100%" : "100%" }),
 };
 
+/** Copy every logged item from another day into the current day. */
+function CopyDayDialog({
+  open,
+  onOpenChange,
+  targetDate,
+  onCopied,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  targetDate: string;
+  onCopied: () => void;
+}) {
+  const [sourceDate, setSourceDate] = useState(() => addDaysISO(targetDate, -1));
+  const [busy, setBusy] = useState(false);
+
+  async function copy() {
+    if (sourceDate === targetDate) {
+      toast.error("Pick a different day");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = await apiFetch<DiaryPayloadDTO>(`/api/diary?date=${sourceDate}`);
+      const entries = payload.meals.flatMap((meal) =>
+        meal.entries.map((entry) => {
+          const snap = entry.nutritionSnapshotJson;
+          const common = {
+            date: targetDate,
+            mealName: meal.mealName,
+            eatenTime: entry.eatenTime ?? undefined,
+          };
+          if (entry.foodId) {
+            return {
+              ...common,
+              foodId: entry.foodId,
+              quantity: entry.quantity,
+              servingMultiplier: entry.servingMultiplier,
+              servingText: snap.serving,
+              loggedVia: "saved_meal",
+            };
+          }
+          if (entry.customStoreOrderId) {
+            return {
+              ...common,
+              customStoreOrderId: entry.customStoreOrderId,
+              quantity: entry.quantity,
+              servingMultiplier: entry.servingMultiplier,
+              servingText: snap.serving,
+              loggedVia: "saved_meal",
+            };
+          }
+          return {
+            ...common,
+            quickAdd: {
+              label: snap.label,
+              calories: snap.calories,
+              proteinG: snap.proteinG,
+              carbsG: snap.carbsG,
+              fatG: snap.fatG,
+            },
+            quantity: 1,
+            servingMultiplier: 1,
+            loggedVia: "quick_add",
+          };
+        }),
+      );
+      if (entries.length === 0) {
+        toast.error(`Nothing logged on ${formatDisplayDate(sourceDate)}`);
+        return;
+      }
+      // The batch endpoint caps at 50 entries per request.
+      for (let i = 0; i < entries.length; i += 50) {
+        await apiFetch("/api/diary/entries/batch", {
+          method: "POST",
+          body: JSON.stringify({ entries: entries.slice(i, i + 50) }),
+        });
+      }
+      haptic("success");
+      toast.success(
+        `Copied ${entries.length} ${entries.length === 1 ? "item" : "items"} from ${formatDisplayDate(sourceDate)}`,
+      );
+      onOpenChange(false);
+      onCopied();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Copy failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Copy a day</DialogTitle>
+          <DialogDescription>
+            Copy every item from another day into {formatDisplayDate(targetDate)}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1">
+          <label htmlFor="copy-source-date" className="text-sm font-medium">
+            Copy from
+          </label>
+          <Input
+            id="copy-source-date"
+            type="date"
+            value={sourceDate}
+            max={todayISO()}
+            onChange={(event) => setSourceDate(event.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              ["Yesterday", addDaysISO(targetDate, -1)],
+              ["1 week ago", addDaysISO(targetDate, -7)],
+            ] as const
+          ).map(([label, day]) => (
+            <Button
+              key={label}
+              variant="outline"
+              size="xs"
+              onClick={() => setSourceDate(day)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <Button disabled={busy} onClick={copy}>
+          {busy ? "Copying…" : "Copy items"}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DiaryHome() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,6 +193,7 @@ function DiaryHome() {
   const [streak, setStreak] = useState<StreakDTO | null>(null);
   const [recentDates, setRecentDates] = useState<string[]>([]);
   const [newMealOpen, setNewMealOpen] = useState(false);
+  const [copyDayOpen, setCopyDayOpen] = useState(false);
   const [newMealName, setNewMealName] = useState("");
   const [insights, setInsights] = useState<string[] | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -254,27 +391,37 @@ function DiaryHome() {
               <ChevronRight aria-hidden />
             </Button>
           </div>
-          {streak ? (
-            <button
-              ref={streakBtnRef}
-              type="button"
-              aria-label="Streak details"
-              onClick={() => setStreakOpen(true)}
-              className={cn(
-                "flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold",
-                streak.todayLogged
-                  ? "bg-cta/15 text-cta-foreground dark:text-cta"
-                  : "bg-muted text-muted-foreground",
-              )}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Copy from another day"
+              onClick={() => setCopyDayOpen(true)}
             >
-              <Flame
-                className={cn("size-4 text-cta", streak.todayLogged && "animate-flame")}
-                fill={streak.todayLogged ? "currentColor" : "none"}
-                aria-hidden
-              />
-              {streak.current}
-            </button>
-          ) : null}
+              <Copy aria-hidden />
+            </Button>
+            {streak ? (
+              <button
+                ref={streakBtnRef}
+                type="button"
+                aria-label="Streak details"
+                onClick={() => setStreakOpen(true)}
+                className={cn(
+                  "flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold",
+                  streak.todayLogged
+                    ? "bg-cta/15 text-cta-foreground dark:text-cta"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                <Flame
+                  className={cn("size-4 text-cta", streak.todayLogged && "animate-flame")}
+                  fill={streak.todayLogged ? "currentColor" : "none"}
+                  aria-hidden
+                />
+                {streak.current}
+              </button>
+            ) : null}
+          </div>
         </div>
         <WeekStrip
           loggedDates={recentDates}
@@ -356,6 +503,14 @@ function DiaryHome() {
 
       {/* Floating quick-log button with a fan-out of logging modes */}
       <QuickLogFab date={date} meal={defaultMealForNow()} />
+
+      <CopyDayDialog
+        key={date}
+        open={copyDayOpen}
+        onOpenChange={setCopyDayOpen}
+        targetDate={date}
+        onCopied={() => fetchDay(date, true)}
+      />
 
       <Dialog open={newMealOpen} onOpenChange={setNewMealOpen}>
         <DialogContent>
