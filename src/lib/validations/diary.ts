@@ -19,8 +19,8 @@ export const createDiaryEntrySchema = z
         fatG: z.number().nonnegative().max(2000).default(0),
       })
       .optional(),
-    quantity: z.number().positive(),
-    servingMultiplier: z.number().positive().default(1),
+    quantity: z.number().positive().max(100000),
+    servingMultiplier: z.number().positive().max(100000).default(1),
     servingText: z.string().max(60).optional(),
     eatenTime: timeString.optional(),
     loggedVia: z.enum([
@@ -40,8 +40,8 @@ export const createDiaryEntrySchema = z
   );
 
 export const updateDiaryEntrySchema = z.object({
-  quantity: z.number().positive().optional(),
-  servingMultiplier: z.number().positive().optional(),
+  quantity: z.number().positive().max(100000).optional(),
+  servingMultiplier: z.number().positive().max(100000).optional(),
   mealName: z.string().min(1).max(40).optional(),
   eatenTime: timeString.nullable().optional(),
 });

@@ -95,11 +95,25 @@ describe("createDiaryEntrySchema", () => {
     const parsed = createDiaryEntrySchema.parse({ ...base, foodId: uuid });
     expect(parsed.servingMultiplier).toBe(1);
   });
+
+  it("rejects an absurd quantity or servingMultiplier (FUNC-01 bound)", () => {
+    expect(
+      createDiaryEntrySchema.safeParse({ ...base, foodId: uuid, quantity: 1_000_000 }).success,
+    ).toBe(false);
+    expect(
+      createDiaryEntrySchema.safeParse({ ...base, foodId: uuid, servingMultiplier: 1_000_000 })
+        .success,
+    ).toBe(false);
+  });
 });
 
 describe("updateDiaryEntrySchema", () => {
   it("rejects non-positive quantity", () => {
     expect(updateDiaryEntrySchema.safeParse({ quantity: 0 }).success).toBe(false);
+  });
+
+  it("rejects an absurd quantity (FUNC-01 bound)", () => {
+    expect(updateDiaryEntrySchema.safeParse({ quantity: 1_000_000 }).success).toBe(false);
   });
 });
 
