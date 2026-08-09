@@ -263,6 +263,28 @@ export interface GoalProfileDTO {
   activities: GoalActivityDTO[];
 }
 
+/** A "Recent" list entry — a food, a saved store build, or a raw quick-add. */
+type RecentMacros = { calories: number; proteinG: number; carbsG: number; fatG: number };
+export type RecentItemDTO =
+  | {
+      kind: "food";
+      food: FoodDTO;
+      lastQuantity: number;
+      lastMultiplier: number;
+      lastServing: string | null;
+    }
+  | {
+      kind: "order";
+      orderId: string;
+      name: string;
+      brand: string | null;
+      nutrition: RecentMacros;
+      lastQuantity: number;
+      lastMultiplier: number;
+      lastServing: string | null;
+    }
+  | { kind: "quick"; label: string; nutrition: RecentMacros };
+
 export interface StreakDTO {
   current: number;
   longest: number;

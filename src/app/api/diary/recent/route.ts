@@ -1,15 +1,17 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { handleApiError, requireUserId } from "@/lib/api";
 import { db } from "@/lib/db";
 import { diaryDays, diaryEntries, diaryMeals, foods } from "@/lib/db/schema";
+import type { FoodDTO, RecentItemDTO } from "@/types/api";
 
 /**
- * The user's most recently logged foods ("Recent" tab) — distinct foods, newest
- * log first. Habit/frequency ranking lives in the separate "Frequent" tab, so
- * this one is pure recency. The last log's exact serving choice rides along so
- * re-logging reproduces it verbatim.
+ * The user's most recently logged items ("Recent" tab), distinct, newest first.
+ * Includes catalog foods, saved store builds, and raw quick-adds — each carrying
+ * enough to re-log it verbatim. Frequency ranking lives in the Frequent tab, so
+ * this is pure recency. We over-fetch recent rows and de-duplicate in JS by
+ * food / order / quick-add-label so one repeated item doesn't crowd the list.
  */
 export async function GET() {
   try {
@@ -17,28 +19,71 @@ export async function GET() {
 
     const rows = await db
       .select({
+        foodId: diaryEntries.foodId,
+        customStoreOrderId: diaryEntries.customStoreOrderId,
+        snapshot: diaryEntries.nutritionSnapshotJson,
+        quantity: diaryEntries.quantity,
+        servingMultiplier: diaryEntries.servingMultiplier,
         food: foods,
-        lastQuantity: sql<number>`(round(((array_agg(${diaryEntries.quantity} order by ${diaryEntries.createdAt} desc))[1])::numeric, 2))::float8`,
-        lastMultiplier: sql<number>`((array_agg(${diaryEntries.servingMultiplier} order by ${diaryEntries.createdAt} desc))[1])::float8`,
-        lastServing: sql<string | null>`(array_agg(${diaryEntries.nutritionSnapshotJson}->>'serving' order by ${diaryEntries.createdAt} desc))[1]`,
       })
       .from(diaryEntries)
       .innerJoin(diaryMeals, eq(diaryMeals.id, diaryEntries.diaryMealId))
       .innerJoin(diaryDays, eq(diaryDays.id, diaryMeals.diaryDayId))
-      .innerJoin(foods, eq(foods.id, diaryEntries.foodId))
+      .leftJoin(foods, eq(foods.id, diaryEntries.foodId))
       .where(eq(diaryDays.userId, userId))
-      .groupBy(foods.id)
-      .orderBy(desc(sql`max(${diaryEntries.createdAt})`))
-      .limit(20);
+      .orderBy(desc(diaryEntries.createdAt))
+      .limit(250);
 
-    return NextResponse.json({
-      recent: rows.map((row) => ({
-        food: row.food,
-        lastQuantity: row.lastQuantity,
-        lastMultiplier: row.lastMultiplier,
-        lastServing: row.lastServing,
-      })),
-    });
+    const seen = new Set<string>();
+    const recent: RecentItemDTO[] = [];
+    for (const row of rows) {
+      const snap = row.snapshot;
+      const lastQuantity = Math.round(row.quantity * 100) / 100;
+      const lastMultiplier = row.servingMultiplier;
+      const lastServing = snap.serving ?? null;
+      const macros = {
+        calories: snap.calories,
+        proteinG: snap.proteinG,
+        carbsG: snap.carbsG,
+        fatG: snap.fatG,
+      };
+
+      let key: string;
+      let item: RecentItemDTO;
+      if (row.foodId && row.food) {
+        key = `food:${row.foodId}`;
+        item = {
+          kind: "food",
+          food: row.food as unknown as FoodDTO,
+          lastQuantity,
+          lastMultiplier,
+          lastServing,
+        };
+      } else if (row.customStoreOrderId) {
+        key = `order:${row.customStoreOrderId}`;
+        item = {
+          kind: "order",
+          orderId: row.customStoreOrderId,
+          name: snap.label,
+          brand: snap.brand ?? null,
+          nutrition: macros,
+          lastQuantity,
+          lastMultiplier,
+          lastServing,
+        };
+      } else {
+        const label = snap.label || "Quick add";
+        key = `quick:${label}`;
+        item = { kind: "quick", label, nutrition: macros };
+      }
+
+      if (seen.has(key)) continue;
+      seen.add(key);
+      recent.push(item);
+      if (recent.length >= 20) break;
+    }
+
+    return NextResponse.json({ recent });
   } catch (error) {
     return handleApiError(error);
   }

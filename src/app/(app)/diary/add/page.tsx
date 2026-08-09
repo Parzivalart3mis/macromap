@@ -48,6 +48,7 @@ import type {
   ExternalFoodResultDTO,
   FoodDTO,
   NaturalLogSuggestionDTO,
+  RecentItemDTO,
   SavedMealDTO,
   StoreDTO,
 } from "@/types/api";
@@ -78,15 +79,9 @@ interface BatchEntry {
   label: string;
 }
 
-interface RecentItem {
-  food: FoodDTO;
-  /** Servings of the last-used unit (not folded into native servings). */
-  lastQuantity: number;
-  /** That unit's multiplier vs the native serving. */
-  lastMultiplier: number;
-  /** Display text of the last serving ("1 large (136 g)"); null on old rows. */
-  lastServing: string | null;
-}
+/** A Recent/Frequent row: a catalog food, a saved store build, or a quick-add. */
+type RecentItem = RecentItemDTO;
+type RecentFood = Extract<RecentItemDTO, { kind: "food" }>;
 
 /**
  * Current wall-clock "HH:MM", but only when logging for today — backfilling a
@@ -111,7 +106,15 @@ function foodSubtitle(food: FoodDTO, quantity = 1): string {
  * History line: the serving exactly as last logged, without the size
  * parenthetical — "1 large · 121 cal", not "1 large (136 g)" or "118 g".
  */
-function recentSubtitle({ food, lastQuantity, lastMultiplier, lastServing }: RecentItem): string {
+function recentSubtitle(item: RecentItem): string {
+  if (item.kind === "order") {
+    const base = item.brand ? `${item.brand} · custom build` : "Custom build";
+    return `${base} · ${Math.round(item.nutrition.calories)} cal`;
+  }
+  if (item.kind === "quick") {
+    return `Quick add · ${Math.round(item.nutrition.calories)} cal`;
+  }
+  const { food, lastQuantity, lastMultiplier, lastServing } = item;
   const factor = lastQuantity * lastMultiplier;
   const serving = (lastServing ?? nativeServingTextFor(food, factor)).replace(
     /\s*\([^)]*\)\s*$/,
@@ -658,10 +661,25 @@ function AddFoodView() {
       apiFetch<{ recent: RecentItem[] }>("/api/diary/recent")
         .then((data) => setRecent(data.recent))
         .catch(() => setRecent([]));
-      apiFetch<{ frequent: RecentItem[] }>(
-        `/api/diary/frequent?meal=${encodeURIComponent(mealName)}`,
-      )
-        .then((data) => setFrequent(data.frequent))
+      apiFetch<{
+        frequent: Array<{
+          food: FoodDTO;
+          lastQuantity: number;
+          lastMultiplier: number;
+          lastServing: string | null;
+        }>;
+      }>(`/api/diary/frequent?meal=${encodeURIComponent(mealName)}`)
+        .then((data) =>
+          setFrequent(
+            data.frequent.map((f) => ({
+              kind: "food" as const,
+              food: f.food,
+              lastQuantity: f.lastQuantity,
+              lastMultiplier: f.lastMultiplier,
+              lastServing: f.lastServing,
+            })),
+          ),
+        )
         .catch(() => setFrequent([]));
       apiFetch<{ savedMeals: SavedMealDTO[] }>("/api/saved-meals")
         .then((data) => setSavedMeals(data.savedMeals))
@@ -783,7 +801,7 @@ function AddFoodView() {
    * "+" on a food row. A plain food logs one native serving; a History item
    * re-logs the last serving verbatim (same unit, count, and text).
    */
-  async function quickLog(item: FoodDTO | RecentItem, quantity = 1) {
+  async function quickLog(item: FoodDTO | RecentFood, quantity = 1) {
     const isRecent = "lastQuantity" in item;
     const food = isRecent ? item.food : item;
     setQuickBusy(food.id);
@@ -847,13 +865,90 @@ function AddFoodView() {
     servingText: nativeServingTextFor(food, 1),
     label: food.name,
   });
-  const recentToBatch = (item: RecentItem): BatchEntry => ({
+  const recentToBatch = (item: RecentFood): BatchEntry => ({
     foodId: item.food.id,
     quantity: item.lastQuantity,
     servingMultiplier: item.lastMultiplier,
     servingText: item.lastServing ?? undefined,
     label: item.food.name,
   });
+
+  // Stable per-row key (also the quick-log busy key + multi-select key).
+  const rowKey = (item: RecentItem) =>
+    item.kind === "food"
+      ? item.food.id
+      : item.kind === "order"
+        ? `order:${item.orderId}`
+        : `quick:${item.label}`;
+  const recentName = (item: RecentItem) =>
+    item.kind === "food" ? item.food.name : item.kind === "order" ? item.name : item.label;
+
+  // Re-log a store build or a quick-add straight from the Recent list.
+  async function relog(item: Exclude<RecentItem, RecentFood>) {
+    const key = rowKey(item);
+    setQuickBusy(key);
+    try {
+      const body =
+        item.kind === "order"
+          ? {
+              date,
+              mealName,
+              customStoreOrderId: item.orderId,
+              quantity: item.lastQuantity,
+              servingMultiplier: item.lastMultiplier,
+              servingText: item.lastServing ?? undefined,
+              eatenTime: currentTimeIfToday(date),
+              loggedVia: "store_builder",
+            }
+          : {
+              date,
+              mealName,
+              quickAdd: {
+                label: item.label,
+                calories: item.nutrition.calories,
+                proteinG: item.nutrition.proteinG,
+                carbsG: item.nutrition.carbsG,
+                fatG: item.nutrition.fatG,
+              },
+              quantity: 1,
+              servingMultiplier: 1,
+              eatenTime: currentTimeIfToday(date),
+              loggedVia: "quick_add",
+            };
+      await apiFetch("/api/diary/entries", { method: "POST", body: JSON.stringify(body) });
+      haptic("success");
+      toast.success(`Logged to ${mealName}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Logging failed");
+    } finally {
+      setQuickBusy(null);
+    }
+  }
+
+  // Render one Recent/Frequent row, kind-aware. Only foods are multi-selectable.
+  const recentRow = (item: RecentItem) => {
+    const key = rowKey(item);
+    const isFood = item.kind === "food";
+    return (
+      <QuickRow
+        key={key}
+        title={recentName(item)}
+        subtitle={recentSubtitle(item)}
+        description={item.kind === "food" ? item.food.description : undefined}
+        verified={item.kind === "food" ? item.food.isVerified : false}
+        busy={quickBusy === key}
+        onOpen={
+          item.kind === "food"
+            ? () => openLog(item.food.id, "search", item.lastQuantity, item.lastMultiplier)
+            : () => relog(item)
+        }
+        onQuickLog={item.kind === "food" ? () => quickLog(item) : () => relog(item)}
+        selectable={multiSelect && isFood}
+        selected={selected.has(key)}
+        onToggleSelect={isFood ? () => toggleSelect(recentToBatch(item)) : undefined}
+      />
+    );
+  };
 
   function toggleSelect(entry: BatchEntry) {
     setSelected((prev) => {
@@ -1056,8 +1151,8 @@ function AddFoodView() {
   const q = query.trim().toLowerCase();
   const filtering = q.length > 0 && !submitted;
   const matchesQuery = (name: string) => !q || name.toLowerCase().includes(q);
-  const recentFiltered = recent?.filter((item) => matchesQuery(item.food.name)) ?? null;
-  const frequentFiltered = frequent?.filter((item) => matchesQuery(item.food.name)) ?? null;
+  const recentFiltered = recent?.filter((item) => matchesQuery(recentName(item))) ?? null;
+  const frequentFiltered = frequent?.filter((item) => matchesQuery(recentName(item))) ?? null;
   const mealsFiltered = savedMeals?.filter((meal) => matchesQuery(meal.name)) ?? null;
   const recipesFiltered = myFoods?.filter((food) => food.isRecipe && matchesQuery(food.name)) ?? null;
   const foodsFiltered = myFoods?.filter((food) => !food.isRecipe && matchesQuery(food.name)) ?? null;
@@ -1516,23 +1611,7 @@ function AddFoodView() {
                     />
                   ) : (
                     <div className="stagger-children space-y-2">
-                      {recentFiltered.map((item) => (
-                        <QuickRow
-                          key={item.food.id}
-                          title={item.food.name}
-                          subtitle={recentSubtitle(item)}
-                          description={item.food.description}
-                          verified={item.food.isVerified}
-                          busy={quickBusy === item.food.id}
-                          onOpen={() =>
-                            openLog(item.food.id, "search", item.lastQuantity, item.lastMultiplier)
-                          }
-                          onQuickLog={() => quickLog(item)}
-                          selectable={multiSelect}
-                          selected={selected.has(item.food.id)}
-                          onToggleSelect={() => toggleSelect(recentToBatch(item))}
-                        />
-                      ))}
+                      {recentFiltered.map(recentRow)}
                     </div>
                   )}
                 </TabsContent>
@@ -1558,23 +1637,7 @@ function AddFoodView() {
                     />
                   ) : (
                     <div className="stagger-children space-y-2">
-                      {frequentFiltered.map((item) => (
-                        <QuickRow
-                          key={item.food.id}
-                          title={item.food.name}
-                          subtitle={recentSubtitle(item)}
-                          description={item.food.description}
-                          verified={item.food.isVerified}
-                          busy={quickBusy === item.food.id}
-                          onOpen={() =>
-                            openLog(item.food.id, "search", item.lastQuantity, item.lastMultiplier)
-                          }
-                          onQuickLog={() => quickLog(item)}
-                          selectable={multiSelect}
-                          selected={selected.has(item.food.id)}
-                          onToggleSelect={() => toggleSelect(recentToBatch(item))}
-                        />
-                      ))}
+                      {frequentFiltered.map(recentRow)}
                     </div>
                   )}
                 </TabsContent>
