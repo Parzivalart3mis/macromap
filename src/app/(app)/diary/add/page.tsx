@@ -655,9 +655,7 @@ function AddFoodView() {
     // becomes visible again (e.g. returning here after logging a food), so a
     // just-logged item shows up in "Recently logged".
     function loadLibrary() {
-      apiFetch<{ recent: RecentItem[] }>(
-        `/api/diary/recent?meal=${encodeURIComponent(mealName)}`,
-      )
+      apiFetch<{ recent: RecentItem[] }>("/api/diary/recent")
         .then((data) => setRecent(data.recent))
         .catch(() => setRecent([]));
       apiFetch<{ frequent: RecentItem[] }>(
