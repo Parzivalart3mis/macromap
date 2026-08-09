@@ -146,6 +146,27 @@ export const goalActivityExceptions = pgTable(
   (t) => [index("goal_activity_exceptions_profile_date_idx").on(t.goalProfileId, t.date)],
 );
 
+/**
+ * Global, reusable activity presets (e.g. "Brisk Walking (10 mins)"). Not tied
+ * to any goal plan, weekday, or date — they never auto-apply. They surface as
+ * quick-picks in "Adjust this day", where tapping one adds it to that date as a
+ * one-off. Calories are derived from carbs (4 kcal/g), matching one-offs.
+ */
+export const activityPresets = pgTable(
+  "activity_presets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    deltaCarbsG: doublePrecision("delta_carbs_g").notNull().default(0),
+    displayOrder: integer("display_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("activity_presets_user_idx").on(t.userId)],
+);
+
 export const foods = pgTable(
   "foods",
   {
@@ -461,6 +482,7 @@ export type GoalProfile = typeof goalProfiles.$inferSelect;
 export type GoalDay = typeof goalDays.$inferSelect;
 export type GoalActivity = typeof goalActivities.$inferSelect;
 export type GoalActivityException = typeof goalActivityExceptions.$inferSelect;
+export type ActivityPreset = typeof activityPresets.$inferSelect;
 export type Food = typeof foods.$inferSelect;
 export type NewFood = typeof foods.$inferInsert;
 export type Store = typeof stores.$inferSelect;

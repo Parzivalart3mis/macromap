@@ -237,6 +237,13 @@ export interface GoalActivityDTO {
   displayOrder: number;
 }
 
+/** A global, reusable activity preset (quick-pick, never auto-applied). */
+export interface ActivityPresetDTO {
+  id: string;
+  name: string;
+  deltaCarbsG: number;
+}
+
 export interface GoalProfileDTO {
   id: string;
   name: string;

@@ -62,3 +62,18 @@ export const createGoalExceptionSchema = z
   .refine((v) => (v.kind === "oneoff" ? !v.activityId : Boolean(v.activityId)), {
     message: "skip/override need an activityId; oneoff must not have one",
   });
+
+// Global, reusable activity presets (name + carbs; calories derived at 4/g).
+export const createActivityPresetSchema = z.object({
+  name: z.string().min(1).max(60),
+  deltaCarbsG: z.number().min(0).max(2000).default(0),
+});
+
+export const updateActivityPresetSchema = z
+  .object({
+    name: z.string().min(1).max(60).optional(),
+    deltaCarbsG: z.number().min(0).max(2000).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.deltaCarbsG !== undefined, {
+    message: "Nothing to update",
+  });

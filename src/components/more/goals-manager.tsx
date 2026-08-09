@@ -24,7 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
-import type { GoalActivityDTO, GoalProfileDTO } from "@/types/api";
+import type { ActivityPresetDTO, GoalActivityDTO, GoalProfileDTO } from "@/types/api";
 
 const DOW_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -402,6 +402,161 @@ function GoalEditor({
   );
 }
 
+/** Global, reusable activity presets — quick-picks for "Adjust this day". */
+function ActivityPresetsSection() {
+  const [presets, setPresets] = useState<ActivityPresetDTO[] | null>(null);
+  const [draft, setDraft] = useState<{ id: string | null; name: string; carbs: string } | null>(
+    null,
+  );
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const { presets } = await apiFetch<{ presets: ActivityPresetDTO[] }>("/api/goals/presets");
+      setPresets(presets);
+    } catch {
+      setPresets([]);
+    }
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function save() {
+    if (!draft) return;
+    const name = draft.name.trim();
+    if (!name) {
+      toast.error("Name the activity");
+      return;
+    }
+    const deltaCarbsG = Number(draft.carbs) || 0;
+    setBusy(true);
+    try {
+      await apiFetch(draft.id ? `/api/goals/presets/${draft.id}` : "/api/goals/presets", {
+        method: draft.id ? "PATCH" : "POST",
+        body: JSON.stringify({ name, deltaCarbsG }),
+      });
+      setDraft(null);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save preset");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setBusy(true);
+    try {
+      await apiFetch(`/api/goals/presets/${id}`, { method: "DELETE" });
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete preset");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
+        <div className="min-w-0">
+          <CardTitle className="text-base">Activity presets</CardTitle>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Shared across all plans · added manually from “Adjust this day” · never auto-applied
+          </p>
+        </div>
+        {draft === null ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="shrink-0"
+            onClick={() => setDraft({ id: null, name: "", carbs: "" })}
+          >
+            <Plus data-icon="inline-start" aria-hidden />
+            New
+          </Button>
+        ) : null}
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {presets === null ? (
+          <ListSkeleton rows={2} />
+        ) : presets.length === 0 && draft === null ? (
+          <EmptyState
+            title="No activity presets"
+            body='Add one like "Brisk Walking (10 mins)" to quick-add it to any day.'
+          />
+        ) : (
+          <ul className="divide-y">
+            {presets.map((preset) => (
+              <li key={preset.id} className="flex items-center gap-2 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{preset.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    +{preset.deltaCarbsG} c · {Math.round(preset.deltaCarbsG * 4)} cal
+                  </span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Edit ${preset.name}`}
+                  onClick={() =>
+                    setDraft({ id: preset.id, name: preset.name, carbs: String(preset.deltaCarbsG) })
+                  }
+                >
+                  <Pencil className="size-4" aria-hidden />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-destructive"
+                  aria-label={`Delete ${preset.name}`}
+                  disabled={busy}
+                  onClick={() => remove(preset.id)}
+                >
+                  <Trash2 className="size-4" aria-hidden />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {draft ? (
+          <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
+            <Input
+              placeholder="Name, e.g. Brisk Walking (10 mins)"
+              value={draft.name}
+              maxLength={60}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              className="h-9 text-sm"
+            />
+            <label className="block">
+              <span className="mb-1 block text-xs text-muted-foreground">
+                Carbs (g) · {Math.round((Number(draft.carbs) || 0) * 4)} cal
+              </span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                value={draft.carbs}
+                onChange={(event) => setDraft({ ...draft, carbs: event.target.value })}
+                className="h-9 px-2 text-sm"
+              />
+            </label>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={busy} onClick={save}>
+                {busy ? "..." : draft.id ? "Update" : "Add"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function GoalsManager() {
   const [profiles, setProfiles] = useState<GoalProfileDTO[] | null>(null);
   const [editing, setEditing] = useState<GoalProfileDTO | null>(null);
@@ -488,7 +643,9 @@ export function GoalsManager() {
   }
 
   return (
-    <Card>
+    <div className="space-y-4">
+      <ActivityPresetsSection />
+      <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-base">Goal profiles</CardTitle>
         <Button size="sm" variant="secondary" onClick={createProfile}>
@@ -573,6 +730,7 @@ export function GoalsManager() {
           onSaved={load}
         />
       ) : null}
-    </Card>
+      </Card>
+    </div>
   );
 }
