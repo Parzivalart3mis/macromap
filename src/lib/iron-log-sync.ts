@@ -5,30 +5,34 @@ type IronLogBodyPayload = {
   notes?: string;
 };
 
+type IronLogNutritionPayload = {
+  date: string; // YYYY-MM-DD
+  calories?: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+};
+
 /**
- * Best-effort push of a body measurement to Iron Log. Fires only for the single
- * configured user, is time-bounded, and never throws — a sync failure must never
- * break or slow the user's MacroMap save.
+ * Best-effort POST to an Iron Log integration endpoint. Fires only for the
+ * single configured user, is time-bounded, and never throws — a sync failure
+ * must never break or slow the caller.
  */
-export async function pushToIronLog(
+async function postToIronLog(
+  path: "body" | "nutrition",
   userId: string,
-  payload: IronLogBodyPayload,
+  payload: Record<string, unknown>,
 ): Promise<void> {
-  const url = process.env.IRON_LOG_SYNC_URL;
+  const base = process.env.IRON_LOG_SYNC_BASE;
   const secret = process.env.IRON_LOG_SYNC_SECRET;
   const syncUserId = process.env.IRON_LOG_SYNC_USER_ID;
   // Not configured, or not the linked user → no-op.
-  if (!url || !secret || !syncUserId || userId !== syncUserId) return;
-
-  // Nothing to sync (e.g. a waist-only body-metric save).
-  if (payload.weightKg == null && payload.bodyFatPct == null && payload.notes == null) {
-    return;
-  }
+  if (!base || !secret || !syncUserId || userId !== syncUserId) return;
 
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    await fetch(url, {
+    await fetch(`${base}/${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -39,6 +43,31 @@ export async function pushToIronLog(
     });
     clearTimeout(timeout);
   } catch {
-    // Best-effort: the MacroMap save already succeeded.
+    // Best-effort: the originating save already succeeded.
   }
+}
+
+/** Mirror a body measurement (weight / body fat / notes) to Iron Log on save. */
+export async function pushToIronLog(
+  userId: string,
+  payload: IronLogBodyPayload,
+): Promise<void> {
+  if (payload.weightKg == null && payload.bodyFatPct == null && payload.notes == null) return;
+  await postToIronLog("body", userId, payload);
+}
+
+/** Mirror a day's finalized macro totals to Iron Log (daily cron). */
+export async function pushNutritionToIronLog(
+  userId: string,
+  payload: IronLogNutritionPayload,
+): Promise<void> {
+  if (
+    payload.calories == null &&
+    payload.proteinG == null &&
+    payload.carbsG == null &&
+    payload.fatG == null
+  ) {
+    return;
+  }
+  await postToIronLog("nutrition", userId, payload);
 }
