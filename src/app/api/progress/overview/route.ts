@@ -10,6 +10,7 @@ import {
   diaryMeals,
   goalDays,
   goalProfiles,
+  profiles,
   weightLogs,
 } from "@/lib/db/schema";
 import { getDiaryPayload } from "@/lib/diary/service";
@@ -83,10 +84,18 @@ export async function GET() {
       .where(and(eq(bodyMetricLogs.userId, userId), gte(bodyMetricLogs.date, ninetyDaysAgo)))
       .orderBy(asc(bodyMetricLogs.date));
 
+    const [profile] = await db
+      .select({ unitSystem: profiles.unitSystem })
+      .from(profiles)
+      .where(eq(profiles.userId, userId))
+      .limit(1);
+    const weightUnit = profile?.unitSystem === "imperial" ? "lb" : "kg";
+
     return NextResponse.json({
       today: { totals: todayPayload.totals, goal: todayPayload.goal },
       calorieHistory,
       loggedDates,
+      weightUnit,
       weights,
       bodyMetrics,
     });

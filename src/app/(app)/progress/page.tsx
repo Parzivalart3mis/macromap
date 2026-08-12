@@ -31,10 +31,12 @@ function LogWeightDialog({
   open,
   onOpenChange,
   onLogged,
+  unit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLogged: () => void;
+  unit: string;
 }) {
   const [weight, setWeight] = useState("");
   const [busy, setBusy] = useState(false);
@@ -70,7 +72,7 @@ function LogWeightDialog({
           <DialogDescription>Recorded for today, one entry per day</DialogDescription>
         </DialogHeader>
         <div className="space-y-1">
-          <Label htmlFor="weight-value">Weight</Label>
+          <Label htmlFor="weight-value">Weight ({unit})</Label>
           <Input
             id="weight-value"
             type="number"
@@ -293,7 +295,7 @@ export default function ProgressPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-base">Weight</CardTitle>
+              <CardTitle className="text-base">Weight ({overview.weightUnit})</CardTitle>
               <Button size="sm" variant="secondary" onClick={() => setWeightOpen(true)}>
                 <Plus data-icon="inline-start" aria-hidden />
                 Log
@@ -308,7 +310,7 @@ export default function ProgressPage() {
                 />
               ) : (
                 <>
-                  <WeightChart data={overview.weights} />
+                  <WeightChart data={overview.weights} unit={overview.weightUnit} />
                   <p className="mt-1 text-center text-[10px] text-muted-foreground">
                     Bold line is your smoothed trend, faint dots are daily readings
                   </p>
@@ -354,7 +356,12 @@ export default function ProgressPage() {
         </div>
       )}
 
-      <LogWeightDialog open={weightOpen} onOpenChange={setWeightOpen} onLogged={load} />
+      <LogWeightDialog
+        open={weightOpen}
+        onOpenChange={setWeightOpen}
+        onLogged={load}
+        unit={overview?.weightUnit ?? "kg"}
+      />
       <LogMetricsDialog open={metricsOpen} onOpenChange={setMetricsOpen} onLogged={load} />
     </main>
   );

@@ -100,8 +100,9 @@ function withTrend(data: WeightLogDTO[], alpha = 0.25) {
 }
 
 /** Weight: faint raw readings plus a bold trend line (the number that matters). */
-export function WeightChart({ data }: { data: WeightLogDTO[] }) {
+export function WeightChart({ data, unit = "" }: { data: WeightLogDTO[]; unit?: string }) {
   const rows = withTrend(data);
+  const suffix = unit ? ` ${unit}` : "";
   return (
     <div className="h-48" role="img" aria-label="Weight trend">
       <ResponsiveContainer>
@@ -130,7 +131,7 @@ export function WeightChart({ data }: { data: WeightLogDTO[] }) {
           <Tooltip
             contentStyle={tooltipContentStyle}
             formatter={(value, name) => [
-              String(value ?? ""),
+              `${value ?? ""}${suffix}`,
               name === "trend" ? "Trend" : "Logged",
             ]}
           />

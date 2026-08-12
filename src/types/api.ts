@@ -296,6 +296,8 @@ export interface ProgressOverviewDTO {
   calorieHistory: Array<{ date: string; calories: number; goal: number | null }>;
   /** Distinct dates (last ~12 weeks) with at least one logged entry. */
   loggedDates: string[];
+  /** Weight unit from the user's profile ("kg" metric / "lb" imperial). */
+  weightUnit: "kg" | "lb";
   weights: WeightLogDTO[];
   bodyMetrics: BodyMetricLogDTO[];
 }
