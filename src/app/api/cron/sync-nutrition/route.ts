@@ -7,8 +7,9 @@ import { getDiaryPayload } from "@/lib/diary/service";
 import { pushNutritionToIronLog } from "@/lib/iron-log-sync";
 import { addDaysISO } from "@/lib/dates";
 
-// Daily Vercel cron: pushes the previous day's finalized macro totals to Iron
-// Log. Runs once each morning so the numbers are stable, not mid-day partials.
+// Daily cron (cron-job.org): pushes the previous day's finalized macro totals to
+// Iron Log. Runs once each morning so the numbers are stable, not mid-day
+// partials. Authenticated by CRON_SECRET via the Authorization header.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
