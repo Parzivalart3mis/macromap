@@ -35,10 +35,12 @@ export function storeThemeStyle(theme: StoreThemeDTO | null): CSSProperties {
 }
 
 /** Sensible default diary meal for "log it now" flows, by local time. */
+// Default meal bucket by local hour: Breakfast < 11:00, Lunch 11:00–15:59,
+// Snacks 16:00–18:59 (the lunch→dinner gap), Dinner 19:00 onwards (after 7 PM).
 export function defaultMealForNow(): string {
   const hour = new Date().getHours();
   if (hour < 11) return "Breakfast";
   if (hour < 16) return "Lunch";
-  if (hour < 21) return "Dinner";
-  return "Snacks";
+  if (hour < 19) return "Snacks";
+  return "Dinner";
 }

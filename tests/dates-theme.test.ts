@@ -56,8 +56,9 @@ describe("defaultMealForNow", () => {
     const cases: Array<[number, string]> = [
       [8, "Breakfast"],
       [12, "Lunch"],
+      [17, "Snacks"],
       [19, "Dinner"],
-      [22, "Snacks"],
+      [22, "Dinner"],
     ];
     for (const [hour, expected] of cases) {
       vi.setSystemTime(new Date(2026, 6, 4, hour, 0, 0));
