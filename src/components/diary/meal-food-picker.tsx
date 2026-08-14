@@ -47,6 +47,7 @@ import type {
   ExternalFoodResultDTO,
   FoodDTO,
   NaturalLogSuggestionDTO,
+  RecentItemDTO,
 } from "@/types/api";
 
 type Mode = null | "barcode" | "voice" | "text";
@@ -199,15 +200,22 @@ export function MealFoodPicker({
   const [review, setReview] = useState<NaturalLogSuggestionDTO[] | null>(null);
 
   useEffect(() => {
-    apiFetch<{
-      recent: {
-        food: FoodDTO;
-        lastQuantity: number;
-        lastMultiplier: number;
-        lastServing: string | null;
-      }[];
-    }>("/api/diary/recent")
-      .then((data) => setRecent(data.recent))
+    // /api/diary/recent now returns a kind-tagged union (foods, store builds,
+    // quick-adds). A meal is built from catalog foods with servings, so this
+    // picker only takes the food-kind rows.
+    apiFetch<{ recent: RecentItemDTO[] }>("/api/diary/recent")
+      .then((data) =>
+        setRecent(
+          data.recent
+            .filter((item): item is Extract<RecentItemDTO, { kind: "food" }> => item.kind === "food")
+            .map((item) => ({
+              food: item.food,
+              lastQuantity: item.lastQuantity,
+              lastMultiplier: item.lastMultiplier,
+              lastServing: item.lastServing,
+            })),
+        ),
+      )
       .catch(() => setRecent([]));
     apiFetch<{ foods: FoodDTO[] }>("/api/foods/mine")
       .then((data) => setMyFoods(data.foods))
