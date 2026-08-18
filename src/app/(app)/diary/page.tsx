@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Flame } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -290,15 +290,6 @@ function DiaryHome() {
   const goPrev = useCallback(() => goTo(addDaysISO(dateRef.current, -1)), [goTo]);
   const goNext = useCallback(() => goTo(addDaysISO(dateRef.current, 1)), [goTo]);
 
-  function handleDragEnd(_e: unknown, info: PanInfo) {
-    const dist = info.offset.x;
-    const vel = info.velocity.x;
-    const swipe = Math.abs(dist) * 0.6 + Math.abs(vel) * 0.2;
-    if (swipe < 60) return;
-    if (dist < 0 || vel < -300) goNext();
-    else goPrev();
-  }
-
   async function addCustomMeal() {
     const name = newMealName.trim();
     if (!name) return;
@@ -477,12 +468,8 @@ function DiaryHome() {
                   ? { duration: 0 }
                   : { type: "spring", stiffness: 520, damping: 42, mass: 0.9 }
               }
-              drag={reduce ? false : "x"}
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.18}
-              onDragEnd={handleDragEnd}
               className="w-full"
-              style={{ touchAction: "pan-y", willChange: "transform" }}
+              style={{ willChange: "transform" }}
             >
               <DiaryDayContent
                 date={date}
