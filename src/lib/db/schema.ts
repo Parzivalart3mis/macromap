@@ -306,6 +306,76 @@ export const storeIngredients = pgTable(
   (t) => [index("store_ingredients_store_idx").on(t.storeId, t.ingredientGroup)],
 );
 
+/**
+ * A build-your-own pizza configuration for a size-scaled store (Domino's): one
+ * row per size × crust, holding the crust-base per-slice nutrition and the
+ * number of slices the whole pizza yields (the nutrition guide's denominator).
+ */
+export const pizzaConfigs = pgTable(
+  "pizza_configs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    storeId: uuid("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    size: text("size").notNull(),
+    crust: text("crust").notNull(),
+    label: text("label").notNull(),
+    slicesPerPizza: integer("slices_per_pizza").notNull(),
+    displayOrder: integer("display_order").notNull().default(0),
+    // Crust-base nutrition, per slice.
+    calories: doublePrecision("calories").notNull(),
+    proteinG: doublePrecision("protein_g").notNull(),
+    carbsG: doublePrecision("carbs_g").notNull(),
+    fatG: doublePrecision("fat_g").notNull(),
+    fiberG: doublePrecision("fiber_g").notNull(),
+    sugarG: doublePrecision("sugar_g").notNull(),
+    satFatG: doublePrecision("sat_fat_g").notNull(),
+    transFatG: doublePrecision("trans_fat_g").notNull(),
+    sodiumMg: doublePrecision("sodium_mg").notNull(),
+    cholesterolMg: doublePrecision("cholesterol_mg").notNull(),
+    addedSugarsG: doublePrecision("added_sugars_g").notNull(),
+  },
+  (t) => [index("pizza_configs_store_idx").on(t.storeId, t.displayOrder)],
+);
+
+/**
+ * A selectable component for a pizza config, per slice. `componentGroup` is
+ * sauce | cheese | topping | extra; cheese rows carry a `variant` of "only"
+ * (cheese-only pizza) or "with_toppings" (the guide lists different cheese
+ * amounts for each). Nutrition is the guide's per-slice value for that size.
+ */
+export const pizzaComponents = pgTable(
+  "pizza_components",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    configId: uuid("config_id")
+      .notNull()
+      .references(() => pizzaConfigs.id, { onDelete: "cascade" }),
+    componentGroup: text("component_group").notNull(),
+    name: text("name").notNull(),
+    variant: text("variant"),
+    selectMarket: boolean("select_market").notNull().default(false),
+    displayOrder: integer("display_order").notNull().default(0),
+    // Per-slice nutrition.
+    calories: doublePrecision("calories").notNull(),
+    proteinG: doublePrecision("protein_g").notNull(),
+    carbsG: doublePrecision("carbs_g").notNull(),
+    fatG: doublePrecision("fat_g").notNull(),
+    fiberG: doublePrecision("fiber_g").notNull(),
+    sugarG: doublePrecision("sugar_g").notNull(),
+    satFatG: doublePrecision("sat_fat_g").notNull(),
+    transFatG: doublePrecision("trans_fat_g").notNull(),
+    sodiumMg: doublePrecision("sodium_mg").notNull(),
+    cholesterolMg: doublePrecision("cholesterol_mg").notNull(),
+    addedSugarsG: doublePrecision("added_sugars_g").notNull(),
+  },
+  (t) => [index("pizza_components_config_idx").on(t.configId, t.componentGroup, t.displayOrder)],
+);
+
+export type PizzaConfig = typeof pizzaConfigs.$inferSelect;
+export type PizzaComponent = typeof pizzaComponents.$inferSelect;
+
 export const customStoreOrders = pgTable(
   "custom_store_orders",
   {

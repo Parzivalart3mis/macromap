@@ -151,6 +151,28 @@ export interface StoreIngredientDTO {
   food: FoodDTO;
 }
 
+export interface PizzaComponentDTO {
+  id: string;
+  group: "sauce" | "cheese" | "topping" | "extra";
+  name: string;
+  /** Cheese rows: "only" | "with_toppings"; else null. */
+  variant: string | null;
+  selectMarket: boolean;
+  /** Per-slice nutrition for this component. */
+  nutrition: NutritionSnapshot;
+}
+
+export interface PizzaConfigDTO {
+  id: string;
+  size: string;
+  crust: string;
+  label: string;
+  slicesPerPizza: number;
+  /** Crust-base nutrition, per slice. */
+  crustNutrition: NutritionSnapshot;
+  components: PizzaComponentDTO[];
+}
+
 export interface CustomStoreOrderItemDTO {
   ingredientFoodId: string;
   quantity: number;

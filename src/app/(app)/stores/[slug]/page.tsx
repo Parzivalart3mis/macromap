@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { CustomBuilder } from "@/components/stores/custom-builder";
+import { PizzaConfigurator } from "@/components/stores/pizza-configurator";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils";
 import type {
   CustomStoreOrderDTO,
   FoodDTO,
+  PizzaConfigDTO,
   StoreIngredientDTO,
   StoreMenuItemDTO,
   StoreThemeDTO,
@@ -65,6 +67,7 @@ function StoreView({ slug }: { slug: string }) {
   const [info, setInfo] = useState<StoreInfo | null>(null);
   const [menu, setMenu] = useState<StoreMenuItemDTO[] | null>(null);
   const [ingredients, setIngredients] = useState<StoreIngredientDTO[] | null>(null);
+  const [pizzaConfigs, setPizzaConfigs] = useState<PizzaConfigDTO[] | null>(null);
   const [orders, setOrders] = useState<CustomStoreOrderDTO[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
@@ -78,15 +81,17 @@ function StoreView({ slug }: { slug: string }) {
 
   const load = useCallback(async () => {
     try {
-      const [infoData, menuData, ingredientsData, ordersData] = await Promise.all([
+      const [infoData, menuData, ingredientsData, ordersData, pizzaData] = await Promise.all([
         apiFetch<StoreInfo>(`/api/stores/${slug}`),
         apiFetch<{ menu: StoreMenuItemDTO[] }>(`/api/stores/${slug}/menu`),
         apiFetch<{ ingredients: StoreIngredientDTO[] }>(`/api/stores/${slug}/ingredients`),
         apiFetch<{ orders: CustomStoreOrderDTO[] }>(`/api/stores/${slug}/custom-orders`),
+        apiFetch<{ configs: PizzaConfigDTO[] }>(`/api/stores/${slug}/pizza`),
       ]);
       setInfo(infoData);
       setMenu(menuData.menu);
       setIngredients(ingredientsData.ingredients);
+      setPizzaConfigs(pizzaData.configs);
       setOrders(ordersData.orders);
       setCategory(infoData.categories[0] ?? null);
     } catch (err) {
@@ -230,7 +235,7 @@ function StoreView({ slug }: { slug: string }) {
     );
   }
 
-  if (!info || !menu || !ingredients || !orders) {
+  if (!info || !menu || !ingredients || !orders || !pizzaConfigs) {
     return (
       <main>
         <ListSkeleton rows={6} />
@@ -370,7 +375,15 @@ function StoreView({ slug }: { slug: string }) {
         </TabsContent>
 
         <TabsContent value="builder" className="pt-3">
-          {ingredients.length === 0 ? (
+          {pizzaConfigs.some((c) => c.components.length > 0) ? (
+            <PizzaConfigurator
+              slug={slug}
+              mealName={mealName}
+              date={date}
+              configs={pizzaConfigs}
+              onLogged={reloadOrders}
+            />
+          ) : ingredients.length === 0 ? (
             <EmptyState
               title="No ingredient catalog yet"
               body="This store does not have a build-your-own ingredient list."
