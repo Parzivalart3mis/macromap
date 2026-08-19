@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
 import { defaultMealForNow } from "@/lib/store-theme";
 import { todayISO } from "@/lib/dates";
+import { isCountUnit } from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type { CustomStoreOrderDTO, StoreIngredientDTO } from "@/types/api";
 
@@ -99,7 +100,9 @@ export function CustomBuilder({
       const current = prev.get(foodId);
       if (!current) return prev;
       const next = new Map(prev);
-      const quantity = Math.round((current.quantity + delta) * 2) / 2;
+      // Snap to the ingredient's own step (whole units for count-based, else 0.5).
+      const step = Math.abs(delta) || 0.5;
+      const quantity = Math.round((current.quantity + delta) / step) * step;
       if (quantity <= 0) next.delete(foodId);
       else next.set(foodId, { quantity });
       return next;
@@ -201,6 +204,8 @@ export function CustomBuilder({
           <ul className="divide-y rounded-xl border bg-card">
             {items.map((ingredient) => {
               const selection = selected.get(ingredient.food.id);
+              // Count-based ingredients (slice, piece) step by whole units; others by 0.5.
+              const step = isCountUnit(ingredient.food.servingSizeUnit) ? 1 : 0.5;
               return (
                 <li
                   key={ingredient.id}
@@ -229,7 +234,7 @@ export function CustomBuilder({
                         variant="outline"
                         size="icon-xs"
                         aria-label={`Less ${ingredient.food.name}`}
-                        onClick={() => adjust(ingredient.food.id, -0.5)}
+                        onClick={() => adjust(ingredient.food.id, -step)}
                       >
                         <Minus aria-hidden />
                       </Button>
@@ -240,7 +245,7 @@ export function CustomBuilder({
                         variant="outline"
                         size="icon-xs"
                         aria-label={`More ${ingredient.food.name}`}
-                        onClick={() => adjust(ingredient.food.id, 0.5)}
+                        onClick={() => adjust(ingredient.food.id, step)}
                       >
                         <Plus aria-hidden />
                       </Button>

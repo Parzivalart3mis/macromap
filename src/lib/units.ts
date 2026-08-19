@@ -119,6 +119,14 @@ function classifyUnit(rawUnit: string): { kind: UnitKind; canonical: string; fac
   return { kind: "count", canonical: rawUnit, factor: 1 };
 }
 
+/**
+ * Whether a serving unit is count-based (slice, piece, roti…) rather than a
+ * weight/volume measure. Used to step whole units in the store builder.
+ */
+export function isCountUnit(unit: string): boolean {
+  return classifyUnit(unit).kind === "count";
+}
+
 /** Pluralize count-based units (serving → servings); weights/volumes stay literal. */
 function pluralizeUnit(unit: string, count: number): string {
   if (count === 1 || classifyUnit(unit).kind !== "count") return unit;
