@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/async-states";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
+import { AssemblyBuilder, assemblyConfigFor } from "@/components/stores/assembly-builder";
 import { CustomBuilder } from "@/components/stores/custom-builder";
 import { PizzaConfigurator } from "@/components/stores/pizza-configurator";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ function StoreView({ slug }: { slug: string }) {
   const date = paramDate && DATE_RE.test(paramDate) ? paramDate : todayISO();
   const mealParam = searchParams.get("meal");
   const mealName = mealParam && mealParam.length <= 40 ? mealParam : defaultMealForNow();
+  const assemblyConfig = assemblyConfigFor(slug);
   const [info, setInfo] = useState<StoreInfo | null>(null);
   const [menu, setMenu] = useState<StoreMenuItemDTO[] | null>(null);
   const [ingredients, setIngredients] = useState<StoreIngredientDTO[] | null>(null);
@@ -382,6 +384,26 @@ function StoreView({ slug }: { slug: string }) {
               date={date}
               configs={pizzaConfigs}
               onLogged={reloadOrders}
+            />
+          ) : assemblyConfig && ingredients.length > 0 ? (
+            <AssemblyBuilder
+              key={editingOrder?.id ?? "new"}
+              slug={slug}
+              config={assemblyConfig}
+              mealName={mealName}
+              date={date}
+              ingredients={ingredients}
+              editOrder={editingOrder}
+              onSaved={() => {
+                reloadOrders();
+                if (editingRef.current) {
+                  endEdit();
+                } else {
+                  setEditingOrder(null);
+                  setTab("saved");
+                }
+              }}
+              onCancelEdit={endEdit}
             />
           ) : ingredients.length === 0 ? (
             <EmptyState
