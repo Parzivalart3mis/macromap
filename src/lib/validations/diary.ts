@@ -87,3 +87,12 @@ export const batchDiaryEntriesSchema = z.object({
   entries: z.array(createDiaryEntrySchema).min(1).max(50),
 });
 export type BatchDiaryEntriesInput = z.infer<typeof batchDiaryEntriesSchema>;
+
+/** Copy the most recent prior day's entries for a meal into `date`'s same bucket. */
+export const repeatMealSchema = z.object({
+  date: dateString,
+  mealName: z.string().min(1).max(40),
+  /** Wall-clock time to stamp the copies with (client-computed local time). */
+  eatenTime: timeString.nullable().optional(),
+});
+export type RepeatMealInput = z.infer<typeof repeatMealSchema>;

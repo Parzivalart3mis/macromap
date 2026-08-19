@@ -154,6 +154,7 @@ export function DiaryDayContent({
   onAnalyze,
   onAddMeal,
   onGoalChanged,
+  onChanged,
   onComplete,
   onUncomplete,
   onViewAnalysis,
@@ -164,6 +165,8 @@ export function DiaryDayContent({
   onAddMeal: () => void;
   /** Refetch this day after an activity/exception write changes the goal. */
   onGoalChanged: () => void;
+  /** Refetch this day after entries change in place (e.g. repeat last meal). */
+  onChanged: () => void;
   /** Mark the day complete (and run/save the AI analysis). */
   onComplete: () => void;
   /** Mark a completed day incomplete again. */
@@ -406,7 +409,7 @@ export function DiaryDayContent({
       </div>
 
       {mergedMeals(payload).map((meal) => (
-        <MealCard key={meal.id} meal={meal} date={date} />
+        <MealCard key={meal.id} meal={meal} date={date} onRepeated={onChanged} />
       ))}
       <Button variant="outline" className="w-full" onClick={onAddMeal}>
         <Plus data-icon="inline-start" aria-hidden />

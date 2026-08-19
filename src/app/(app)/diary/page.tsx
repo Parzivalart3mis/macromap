@@ -477,6 +477,7 @@ function DiaryHome() {
                 onAnalyze={analyze}
                 onAddMeal={() => setNewMealOpen(true)}
                 onGoalChanged={() => fetchDay(date, true)}
+                onChanged={() => fetchDay(date, true)}
                 onComplete={completeDay}
                 onUncomplete={uncompleteDay}
                 onViewAnalysis={() => {
