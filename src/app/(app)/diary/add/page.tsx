@@ -737,24 +737,23 @@ function AddFoodView() {
     }
   }
 
-  // Search-as-you-type: schedule the combined DB+web search shortly after the
-  // query settles. State transitions live in runSearch so this effect only
-  // schedules/cancels the debounced fetch (and runs once for a URL-restored
-  // query on mount).
+  // The full shared-DB + web search runs only on submit (search button / Enter),
+  // never on keystroke. A restored ?q= search (returning from a food/store page)
+  // fetches its results once on mount.
   useEffect(() => {
-    if (query.trim().length < 2) return;
-    const handle = setTimeout(() => void fetchResults(query.trim()), 250);
+    if (!submitted || query.trim().length < 2) return;
+    const handle = setTimeout(() => void fetchResults(query.trim()), 0);
     return () => clearTimeout(handle);
-  }, [query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Typing only filters the currently-open category (live, local — no DB call).
+  // Editing the query after a full search drops back to category mode.
   function runSearch(value: string) {
     setQuery(value);
     syncUrl(value, mealName);
-    if (value.trim().length >= 2) {
-      setSubmitted(true);
-      setSearching(true);
-    } else {
-      searchSeq.current++; // discard any in-flight result
+    if (submitted) {
+      searchSeq.current++; // cancel any in-flight full-search result
       setSubmitted(false);
       setSearching(false);
       setResults([]);
@@ -762,9 +761,10 @@ function AddFoodView() {
     }
   }
 
-  // Pressing the keyboard search key / magnifier searches immediately.
+  // The full shared-DB search: search button / keyboard search key / Enter.
   function submitSearch() {
     if (query.trim().length < 2) return;
+    setSubmitted(true);
     setSearching(true);
     void fetchResults(query);
   }
