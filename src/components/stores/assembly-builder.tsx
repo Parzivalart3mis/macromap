@@ -25,6 +25,15 @@ export interface AssemblyConfig {
   defaultSelect?: string;
   /** Map an ingredient name to a short word for the auto-suggested build name. */
   formatShortNames?: Record<string, string>;
+  /** How to auto-name a build: "<primary> <suffix>", e.g. "Chicken Bowl". */
+  nameFrom: {
+    primaryGroup: string;
+    primaryFallback: string;
+    /** If set, the selected item in this group supplies the suffix. */
+    suffixGroup?: string;
+    /** Fixed suffix when suffixGroup is unset. */
+    suffix?: string;
+  };
 }
 
 // Registry of stores that use the guided assembly builder (vs the flat one).
@@ -48,6 +57,20 @@ const CONFIGS: Record<string, AssemblyConfig> = {
       "3 Soft Flour Tacos": "Tacos",
       "Salad (supergreens)": "Salad",
     },
+    nameFrom: { primaryGroup: "Protein", primaryFallback: "Veggie", suffixGroup: "Format" },
+  },
+  subway: {
+    order: ["Bread", "Protein", "Cheese", "Vegetables", "Sauces", "Seasonings"],
+    single: ["Bread"],
+    hint: {
+      Bread: "Pick one",
+      Protein: "Add any · tap + for double",
+      Cheese: "Add any",
+      Vegetables: "Add any",
+      Sauces: "Add any",
+      Seasonings: "Add any",
+    },
+    nameFrom: { primaryGroup: "Protein", primaryFallback: "Veggie", suffix: "Sub" },
   },
 };
 
@@ -134,17 +157,19 @@ export function AssemblyBuilder({
     return { calories, proteinG, carbsG, fatG };
   }, [ingredients, selected]);
 
-  // Auto name: "<protein or Veggie> <format>", e.g. "Chicken Bowl".
+  // Auto name: "<primary> <suffix>", e.g. "Chicken Bowl" or "Turkey Sub".
   const suggestedName = useMemo(() => {
-    const pick = (group: string) =>
+    const firstIn = (group: string) =>
       ingredients.find((i) => groupOf.get(i.food.id) === group && selected.has(i.food.id));
-    const protein = pick("Protein")?.food.name ?? "Veggie";
-    const fmt = pick("Format");
-    const fmtShort = fmt
-      ? (config.formatShortNames?.[fmt.food.name] ?? fmt.food.name)
-      : "Bowl";
-    return `${protein} ${fmtShort}`;
-  }, [ingredients, groupOf, selected, config.formatShortNames]);
+    const { primaryGroup, primaryFallback, suffixGroup, suffix } = config.nameFrom;
+    const primary = firstIn(primaryGroup)?.food.name ?? primaryFallback;
+    let tail = suffix ?? "";
+    if (suffixGroup) {
+      const f = firstIn(suffixGroup);
+      tail = f ? (config.formatShortNames?.[f.food.name] ?? f.food.name) : "";
+    }
+    return `${primary} ${tail}`.trim();
+  }, [ingredients, groupOf, selected, config.nameFrom, config.formatShortNames]);
 
   function pick(group: string, foodId: string) {
     const isSingle = config.single.includes(group);
