@@ -8,6 +8,7 @@ import { ErrorState, ListSkeleton } from "@/components/async-states";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { StoreLogo } from "@/components/stores/store-logo";
 import { apiFetch } from "@/lib/client/fetcher";
 import type { StoreDTO } from "@/types/api";
 
@@ -79,13 +80,7 @@ export default function FoodPage() {
                       background: `linear-gradient(90deg, var(--tile-color), color-mix(in oklab, var(--tile-color), transparent 45%))`,
                     }}
                   />
-                  <span
-                    className="mt-1 flex size-9 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm"
-                    style={{ backgroundColor: "var(--tile-color)" }}
-                    aria-hidden
-                  >
-                    {store.name.charAt(0)}
-                  </span>
+                  <StoreLogo slug={store.slug} name={store.name} className="mt-1 size-9" />
                   <span className="flex items-center justify-between gap-1">
                     <span className="text-sm font-semibold">{store.name}</span>
                     <ChevronRight
