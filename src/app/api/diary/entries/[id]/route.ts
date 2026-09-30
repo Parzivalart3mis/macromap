@@ -4,12 +4,9 @@ import { NextResponse } from "next/server";
 import { ApiError, handleApiError, parseBody, requireDbUser } from "@/lib/api";
 import { db } from "@/lib/db";
 import { diaryDays, diaryEntries, diaryMeals } from "@/lib/db/schema";
-import { getOrCreateMeal } from "@/lib/diary/service";
-import { roundNutrition, scaleNutrition } from "@/lib/nutrition";
+import { getOrCreateMeal, rescaleEntrySnapshot } from "@/lib/diary/service";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { scaleServingText } from "@/lib/units";
 import { updateDiaryEntrySchema } from "@/lib/validations/diary";
-import type { NutritionSnapshot } from "@/types/nutrition";
 
 async function requireOwnedEntry(userId: string, entryId: string) {
   const [row] = await db
@@ -45,21 +42,15 @@ export async function PATCH(
 
     if (input.quantity != null || input.servingMultiplier != null) {
       // Rescale from the stored snapshot so history stays immutable even if
-      // the underlying shared food was edited since logging.
+      // the underlying shared food was edited since logging. `servingText` is
+      // supplied when the unit changed, and then wins over scaling the old text.
       const oldFactor = entry.quantity * entry.servingMultiplier;
       const newFactor = quantity * servingMultiplier;
-      const ratio = newFactor / oldFactor;
-      const { label, serving, brand, ...nutrition } = entry.nutritionSnapshotJson;
-      const rescaled = roundNutrition(
-        scaleNutrition(nutrition as NutritionSnapshot, ratio),
+      updates.nutritionSnapshotJson = rescaleEntrySnapshot(
+        entry.nutritionSnapshotJson,
+        newFactor / oldFactor,
+        input.servingText,
       );
-      // Scale the "2 slices"-style serving text's amount to match the new quantity.
-      updates.nutritionSnapshotJson = {
-        ...rescaled,
-        label,
-        serving: scaleServingText(serving, ratio),
-        brand,
-      };
     }
 
     if (input.mealName) {

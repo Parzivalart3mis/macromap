@@ -21,6 +21,7 @@ import {
   type GoalDay,
 } from "@/lib/db/schema";
 import { foodToNutrition, roundNutrition, scaleNutrition, sumNutrition } from "@/lib/nutrition";
+import { scaleServingText } from "@/lib/units";
 import type { NutritionSnapshot } from "@/types/nutrition";
 
 export const DEFAULT_MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
@@ -170,6 +171,40 @@ export function buildEntrySnapshot(
     };
   }
   throw new ApiError("invalid_request", "Entry source missing", 400);
+}
+
+/** The frozen snapshot shape carried by every diary entry. */
+export type EntrySnapshot = NutritionSnapshot & {
+  label: string;
+  serving?: string;
+  brand?: string;
+};
+
+/**
+ * Rebuild an entry's frozen snapshot for a new quantity and/or serving unit.
+ * Nutrition always rescales from the stored snapshot (never the live food) so
+ * history stays immutable even after the shared food is edited.
+ *
+ * The serving text is the subtle part. Changing only the *count* means the old
+ * text just scales ("2 slices" ×2 → "4 slices"). Changing the *unit* does not:
+ * scaling "1 cup (245 g)" by 0.408 yields "0.41 cup" when the truth is "100 g".
+ * So callers that switch units pass the chosen option's label explicitly and it
+ * is used verbatim; callers that only change the count omit it and keep the
+ * scaling behaviour.
+ */
+export function rescaleEntrySnapshot(
+  snapshot: EntrySnapshot,
+  ratio: number,
+  servingText?: string,
+): EntrySnapshot {
+  const { label, serving, brand, ...nutrition } = snapshot;
+  const explicit = servingText?.trim();
+  return {
+    ...roundNutrition(scaleNutrition(nutrition as NutritionSnapshot, ratio)),
+    label,
+    serving: explicit || scaleServingText(serving, ratio),
+    brand,
+  };
 }
 
 /** A logged entry plus whether its food currently carries the verified badge. */

@@ -42,6 +42,12 @@ export const createDiaryEntrySchema = z
 export const updateDiaryEntrySchema = z.object({
   quantity: z.number().positive().max(100000).optional(),
   servingMultiplier: z.number().positive().max(100000).optional(),
+  /**
+   * The chosen unit's label, sent when the serving *unit* changes ("1 cup
+   * (245 g)" → "100 g"). Omitted for a plain count change, where the stored
+   * text is scaled instead.
+   */
+  servingText: z.string().max(60).optional(),
   mealName: z.string().min(1).max(40).optional(),
   eatenTime: timeString.nullable().optional(),
 });
