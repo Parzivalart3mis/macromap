@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { ErrorState, ListSkeleton } from "@/components/async-states";
+import { ServingSizeRow, UnitPickerSheet } from "@/components/diary/unit-picker-sheet";
 import { DailyGoalBars } from "@/components/nutrition/goal-bars";
 import { MacroRing, macroPctOfCalories } from "@/components/nutrition/macro-ring";
 import { NutritionPanel } from "@/components/nutrition/nutrition-panel";
@@ -17,12 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -218,17 +213,11 @@ function LogFoodView() {
 
         {/* Fields */}
         <div className="divide-y rounded-2xl border bg-card text-sm">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-            onClick={() => setUnitSheetOpen(true)}
-          >
-            <span className="font-medium">Serving Size</span>
-            <span className="flex items-center gap-1 rounded-lg border px-3 py-1.5 font-semibold text-primary">
-              {option.label}
-              <ChevronDown className="size-3.5" aria-hidden />
-            </span>
-          </button>
+          <ServingSizeRow
+            value={option.label}
+            interactive={options.length > 1}
+            onOpen={() => setUnitSheetOpen(true)}
+          />
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <label htmlFor="servings" className="font-medium">
               Number of Servings
@@ -345,36 +334,13 @@ function LogFoodView() {
       </div>
 
       {/* Unit selector */}
-      <Sheet open={unitSheetOpen} onOpenChange={setUnitSheetOpen}>
-        <SheetContent side="bottom" className="sheet-safe-bottom max-h-[70dvh] overflow-y-auto rounded-t-2xl">
-          <SheetHeader>
-            <SheetTitle>Select Unit</SheetTitle>
-          </SheetHeader>
-          <ul className="space-y-1 px-4 pb-6">
-            {options.map((opt) => {
-              const active = opt.label === option.label;
-              return (
-                <li key={opt.label}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOption(opt);
-                      setUnitSheetOpen(false);
-                    }}
-                    className={cn(
-                      "flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-4 text-left font-medium",
-                      active ? "border-primary bg-primary/5" : "bg-card",
-                    )}
-                  >
-                    {opt.label}
-                    {active ? <Check className="size-5 text-primary" aria-hidden /> : null}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </SheetContent>
-      </Sheet>
+      <UnitPickerSheet
+        open={unitSheetOpen}
+        onOpenChange={setUnitSheetOpen}
+        options={options}
+        selected={option.label}
+        onSelect={setOption}
+      />
     </main>
   );
 }
