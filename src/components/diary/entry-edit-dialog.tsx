@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { ServingSizeRow, UnitPickerSheet } from "@/components/diary/unit-picker-sheet";
 import { VerifiedBadge } from "@/components/foods/verified-badge";
 import { DailyGoalBars } from "@/components/nutrition/goal-bars";
 import { MacroRing, macroPctOfCalories } from "@/components/nutrition/macro-ring";
@@ -24,7 +25,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
-import { nativeServingLabel, scaleServingText } from "@/lib/units";
+import {
+  baseServingAmount,
+  computeServing,
+  matchServingOption,
+  nativeServingLabel,
+  scaleServingText,
+  servingOptions,
+  type UnitOption,
+} from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type { DiaryEntryDTO, FoodDTO, GoalDTO } from "@/types/api";
 import { NUTRITION_KEYS, type NutritionSnapshot } from "@/types/nutrition";
@@ -72,6 +81,11 @@ export function EntryEditDialog({
   const [factsOpen, setFactsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [food, setFood] = useState<FoodDTO | null>(null);
+  const [unitSheetOpen, setUnitSheetOpen] = useState(false);
+  // The unit the user picked this session. null means "unchanged" — either they
+  // have not touched it, or the food no longer offers the unit this was logged
+  // in, in which case we must leave the entry exactly as it is.
+  const [option, setOption] = useState<UnitOption | null>(null);
 
   const entryFoodId = entry.foodId;
   useEffect(() => {
@@ -90,10 +104,22 @@ export function EntryEditDialog({
   const quantity = Number(servings);
   const valid = Number.isFinite(quantity) && quantity > 0;
   const { label, ...snapshot } = entry.nutritionSnapshotJson;
-  // Rescale the stored snapshot — same math the PATCH endpoint applies.
+
+  // Units come from the live food; nutrition comes from the frozen snapshot.
+  const options = food ? servingOptions(food) : [];
+  // Which option the entry was logged in. A food edited since logging may no
+  // longer offer it, and then nothing is preselected (see `option` above).
+  const loggedOption = food ? matchServingOption(food, entry.servingMultiplier) : null;
+  const activeOption = option ?? loggedOption;
+  // Switching units rescales by the ratio of the new multiplier to the logged
+  // one — exactly what the PATCH endpoint does to the stored snapshot.
+  const multiplierRatio =
+    option && food && baseServingAmount(food) > 0
+      ? option.baseAmount / baseServingAmount(food) / entry.servingMultiplier
+      : 1;
   const nutrition = scaleSnapshot(
     snapshot as NutritionSnapshot,
-    valid ? quantity / entry.quantity : 0,
+    valid ? (quantity / entry.quantity) * multiplierRatio : 0,
   );
 
   // The entry's own serving text ("1 large (136 g)") is the truth about what
@@ -103,11 +129,15 @@ export function EntryEditDialog({
   // count ("4 slices" over 2 servings reads "2 slices"). Brand prefers the
   // live food (renames).
   const brand = food?.brandName ?? snapshot.brand ?? null;
-  const servingText = snapshot.serving
-    ? scaleServingText(snapshot.serving, 1 / entry.quantity)
-    : food
-      ? nativeServingLabel(food)
-      : null;
+  // A unit picked this session describes itself; otherwise fall back to the
+  // entry's own text, then the live food's native serving for old entries.
+  const servingText =
+    activeOption?.label ??
+    (snapshot.serving
+      ? (scaleServingText(snapshot.serving, 1 / entry.quantity) ?? null)
+      : food
+        ? nativeServingLabel(food)
+        : null);
   const sourceLine =
     [brand, servingText].filter(Boolean).join(", ") ||
     (entry.customStoreOrderId ? "Custom build" : "Generic");
@@ -123,6 +153,20 @@ export function EntryEditDialog({
       if (quantity !== entry.quantity) changes.quantity = quantity;
       if (targetMeal !== mealName) changes.mealName = targetMeal;
       if (eatenTime !== (entry.eatenTime ?? "")) changes.eatenTime = eatenTime || null;
+      // A unit change sends its multiplier plus the chosen label, so the stored
+      // serving text is the unit itself rather than the old text scaled.
+      if (option && food) {
+        const base = baseServingAmount(food);
+        const nextMultiplier = base > 0 ? option.baseAmount / base : entry.servingMultiplier;
+        if (nextMultiplier !== entry.servingMultiplier) {
+          changes.servingMultiplier = nextMultiplier;
+          changes.servingText = computeServing(
+            food,
+            option,
+            valid ? quantity : 1,
+          ).servingText;
+        }
+      }
       let updated: DiaryEntryDTO | null | undefined;
       if (Object.keys(changes).length > 0) {
         const response = await apiFetch<{ entry: DiaryEntryDTO }>(
@@ -201,12 +245,11 @@ export function EntryEditDialog({
         {/* Fields */}
         <div className="divide-y rounded-xl border bg-card text-sm">
           {servingText ? (
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <span className="font-medium">Serving Size</span>
-              <span className="rounded-lg border px-3 py-1.5 font-semibold text-primary">
-                {servingText}
-              </span>
-            </div>
+            <ServingSizeRow
+              value={servingText}
+              interactive={options.length > 1}
+              onOpen={() => setUnitSheetOpen(true)}
+            />
           ) : null}
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <label htmlFor="edit-servings-input" className="font-medium">
@@ -342,6 +385,14 @@ export function EntryEditDialog({
             Delete
           </Button>
         </div>
+
+        <UnitPickerSheet
+          open={unitSheetOpen}
+          onOpenChange={setUnitSheetOpen}
+          options={options}
+          selected={activeOption?.label ?? null}
+          onSelect={setOption}
+        />
       </DialogContent>
     </Dialog>
   );

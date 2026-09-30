@@ -22,9 +22,9 @@ import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import {
-  baseServingAmount,
   computeServing,
   formatNum,
+  matchServingOption,
   nativeServingLabel,
   servingOptions,
   type UnitOption,
@@ -91,10 +91,7 @@ function LogFoodView() {
         // that unit no longer exists, fall back to the native serving and
         // fold the multiplier into the count so the amount stays right.
         const options = servingOptions(data.food);
-        const base = baseServingAmount(data.food);
-        const match = initialMult
-          ? options.find((o) => Math.abs(o.baseAmount - initialMult * base) <= base * 1e-6)
-          : undefined;
+        const match = initialMult ? matchServingOption(data.food, initialMult) : null;
         setOption(match ?? options[0] ?? null);
         if (initialMult && !match) {
           setServings((prev) => {

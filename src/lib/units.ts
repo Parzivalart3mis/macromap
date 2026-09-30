@@ -203,6 +203,24 @@ export function servingOptions(food: FoodDTO): UnitOption[] {
 }
 
 /** Compute the diary-entry parameters and preview nutrition for a choice. */
+/**
+ * The serving option a stored `servingMultiplier` was logged in, or null when
+ * none matches — which happens when the food's servings were edited after the
+ * entry was logged. Callers must treat null as "leave the entry alone" rather
+ * than silently snapping it to another unit.
+ */
+export function matchServingOption(
+  food: FoodDTO,
+  servingMultiplier: number,
+): UnitOption | null {
+  const base = baseServingAmount(food);
+  if (!(base > 0) || !Number.isFinite(servingMultiplier)) return null;
+  const target = servingMultiplier * base;
+  return (
+    servingOptions(food).find((o) => Math.abs(o.baseAmount - target) <= base * 1e-6) ?? null
+  );
+}
+
 export function computeServing(
   food: FoodDTO,
   option: UnitOption,

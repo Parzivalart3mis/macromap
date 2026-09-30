@@ -4,6 +4,7 @@ import {
   baseServingAmount,
   computeServing,
   formatNum,
+  matchServingOption,
   nativeServingTextFor,
   scaleServingText,
   servingOptions,
@@ -248,5 +249,54 @@ describe("nativeServingTextFor", () => {
     const bread = food({ servingSizeValue: 2, servingSizeUnit: "slices" });
     expect(nativeServingTextFor(bread, 1)).toBe("2 slices");
     expect(nativeServingTextFor(bread, 2)).toBe("4 slices");
+  });
+});
+
+describe("matchServingOption", () => {
+  // The curd entry: base 100 g with a "1 cup (245 g)" alternate.
+  const curd = food({
+    servingSizeValue: 100,
+    servingSizeUnit: "g",
+    alternateServings: [{ unit: "cup", multiplier: 2.45, label: "1 cup (245 g)" }],
+    calories: 61,
+  });
+
+  it("finds the native serving at multiplier 1", () => {
+    expect(matchServingOption(curd, 1)?.label).toBe("100 g");
+  });
+
+  it("finds an alternate serving by its multiplier", () => {
+    expect(matchServingOption(curd, 2.45)?.label).toBe("1 cup (245 g)");
+  });
+
+  it("finds an auto-generated weight option", () => {
+    // 1 oz = 28.3495 g against a 100 g base.
+    expect(matchServingOption(curd, 0.283495)?.label).toBe("1 oz");
+  });
+
+  it("returns null when no option matches", () => {
+    // A multiplier from a unit the food no longer offers: leave the entry alone.
+    expect(matchServingOption(curd, 3.7)).toBeNull();
+  });
+
+  it("returns null for a food with no measurable base", () => {
+    expect(matchServingOption(curd, Number.NaN)).toBeNull();
+  });
+
+  it("tolerates floating-point drift in a stored multiplier", () => {
+    expect(matchServingOption(curd, 2.4500000001)?.label).toBe("1 cup (245 g)");
+  });
+
+  it("matches count-based alternates too", () => {
+    const cookie = food({
+      servingSizeValue: 1,
+      servingSizeUnit: "cookie",
+      servingSizeLabel: "1 cookie (~15.5 g)",
+      alternateServings: [{ unit: "cookie", multiplier: 2, label: "2 cookies" }],
+      calories: 70,
+    });
+    expect(matchServingOption(cookie, 1)?.label).toBe("1 cookie (~15.5 g)");
+    expect(matchServingOption(cookie, 2)?.label).toBe("2 cookies");
+    expect(matchServingOption(cookie, 5)).toBeNull();
   });
 });
