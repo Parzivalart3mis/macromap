@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ListSkeleton } from "@/components/async-states";
+import { PHASES, PhaseSwitcher, phaseLabel } from "@/components/more/phase-switcher";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +25,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
-import type { ActivityPresetDTO, GoalActivityDTO, GoalProfileDTO } from "@/types/api";
+import type {
+  ActivityPresetDTO,
+  GoalActivityDTO,
+  GoalPhaseDTO,
+  GoalProfileDTO,
+} from "@/types/api";
 
 const DOW_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -34,6 +40,34 @@ function activityCalories(a: Pick<GoalActivityDTO, "deltaCarbsG" | "deltaProtein
 }
 
 /** Blank draft for the add form. */
+/** Phases that already have all 7 days filled in. */
+function phasesConfigured(profile: GoalProfileDTO): Set<GoalPhaseDTO> {
+  const counts = new Map<GoalPhaseDTO, number>();
+  for (const day of profile.days) counts.set(day.phase, (counts.get(day.phase) ?? 0) + 1);
+  return new Set(PHASES.map((p) => p.value).filter((p) => (counts.get(p) ?? 0) === 7));
+}
+
+/** That phase's seven rows as editable strings, or blanks when it has none. */
+function daysForPhase(profile: GoalProfileDTO, phase: GoalPhaseDTO): DayValues[] {
+  const byDow = new Map(
+    profile.days.filter((day) => day.phase === phase).map((day) => [day.dayOfWeek, day]),
+  );
+  const num = (v: number | null | undefined) => (v != null ? String(v) : "");
+  return Array.from({ length: 7 }, (_, dow) => {
+    const day = byDow.get(dow);
+    return {
+      calories: String(day?.calories ?? 2000),
+      proteinG: String(day?.proteinG ?? 150),
+      carbsG: String(day?.carbsG ?? 200),
+      fatG: String(day?.fatG ?? 70),
+      fiberG: num(day?.fiberG),
+      sugarGMax: num(day?.sugarGMax),
+      sodiumMgMax: num(day?.sodiumMgMax),
+      satFatGMax: num(day?.satFatGMax),
+    };
+  });
+}
+
 function emptyDraft() {
   return { name: "", days: [false, false, false, false, false, false, false], c: "", p: "", f: "" };
 }
@@ -245,23 +279,18 @@ function GoalEditor({
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }) {
-  const [days, setDays] = useState<DayValues[]>(() => {
-    const byDow = new Map(profile.days.map((day) => [day.dayOfWeek, day]));
-    return Array.from({ length: 7 }, (_, dow) => {
-      const day = byDow.get(dow);
-      const num = (v: number | null | undefined) => (v != null ? String(v) : "");
-      return {
-        calories: String(day?.calories ?? 2000),
-        proteinG: String(day?.proteinG ?? 150),
-        carbsG: String(day?.carbsG ?? 200),
-        fatG: String(day?.fatG ?? 70),
-        fiberG: num(day?.fiberG),
-        sugarGMax: num(day?.sugarGMax),
-        sodiumMgMax: num(day?.sodiumMgMax),
-        satFatGMax: num(day?.satFatGMax),
-      };
-    });
-  });
+  // Which of the four tables is on screen. Starts on the one in force.
+  const [phase, setPhase] = useState<GoalPhaseDTO>(profile.activePhase);
+  const configured = phasesConfigured(profile);
+  const [days, setDays] = useState<DayValues[]>(() => daysForPhase(profile, profile.activePhase));
+
+  // Switching phase swaps the whole table for that phase's rows, or blanks
+  // ready to be filled when the phase has none yet.
+  function switchPhase(next: GoalPhaseDTO) {
+    if (next === phase) return;
+    setPhase(next);
+    setDays(daysForPhase(profile, next));
+  }
   // Limits are opt-in; auto-shown when the profile already has any per-day limit.
   const [showLimits, setShowLimits] = useState(() =>
     profile.days.some(
@@ -312,13 +341,30 @@ function GoalEditor({
     try {
       await apiFetch(`/api/goals/${profile.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ days: parsed }),
+        body: JSON.stringify({ phase, days: parsed }),
       });
-      toast.success("Goals updated");
+      toast.success(`${phaseLabel(phase)} targets updated`);
       onOpenChange(false);
       onSaved();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function makeActive() {
+    setBusy(true);
+    try {
+      await apiFetch(`/api/goals/${profile.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ activePhase: phase }),
+      });
+      toast.success(`Now on ${phaseLabel(phase)}`);
+      onOpenChange(false);
+      onSaved();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not switch phase");
     } finally {
       setBusy(false);
     }
@@ -335,6 +381,36 @@ function GoalEditor({
             Set calories, macros, and optional limits per day of week
           </DialogDescription>
         </DialogHeader>
+
+        {/* Four weekly tables per plan; the table below belongs to the one picked. */}
+        <div className="space-y-2">
+          <PhaseSwitcher
+            value={phase}
+            onChange={switchPhase}
+            configured={configured}
+            disabled={busy}
+            idPrefix={`editor-${profile.id}`}
+          />
+          <p className="text-xs text-muted-foreground">
+            {phase === profile.activePhase ? (
+              <>
+                <span className="font-medium text-primary">In force.</span> Editing{" "}
+                {phaseLabel(phase)} — days you log from now on use these targets.
+              </>
+            ) : configured.has(phase) ? (
+              <>
+                Editing {phaseLabel(phase)}. Save, then use{" "}
+                <span className="font-medium">Make active</span> to switch to it.
+              </>
+            ) : (
+              <>
+                {phaseLabel(phase)} has no targets yet — fill the table and save to create
+                it.
+              </>
+            )}
+          </p>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -391,12 +467,20 @@ function GoalEditor({
           {showLimits ? "Hide daily limits" : "Add daily limits (fiber, sugar, sodium…)"}
         </Button>
 
-        {/* Recurring activities layered on top of the base day targets */}
+        {/* Recurring activities layered on top of the base day targets.
+            Shared by all four phases — one set, not four. */}
         <ActivitiesSection profileId={profile.id} initial={profile.activities} onChanged={onSaved} />
 
-        <Button disabled={busy} onClick={save}>
-          {busy ? "Saving..." : "Save goals"}
-        </Button>
+        <div className="flex gap-2">
+          <Button className="flex-1" disabled={busy} onClick={save}>
+            {busy ? "Saving..." : `Save ${phaseLabel(phase)}`}
+          </Button>
+          {phase !== profile.activePhase && configured.has(phase) ? (
+            <Button variant="secondary" disabled={busy} onClick={makeActive}>
+              Make active
+            </Button>
+          ) : null}
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -675,9 +759,12 @@ export function GoalsManager() {
                     {profile.isActive ? <Badge variant="secondary">Active</Badge> : null}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {profile.days[0]
-                      ? `${profile.days[0].calories} kcal · ${Math.round(profile.days[0].proteinG)}p base`
-                      : "Tap to edit"}
+                    {(() => {
+                      // Summarise the phase actually in force, not whichever row sorts first.
+                      const day = profile.days.find((d) => d.phase === profile.activePhase);
+                      if (!day) return "Tap to edit";
+                      return `${phaseLabel(profile.activePhase)} · ${day.calories} kcal · ${Math.round(day.proteinG)}p base`;
+                    })()}
                   </span>
                 </button>
                 {!profile.isActive ? (
