@@ -58,6 +58,21 @@ export const profiles = pgTable("profiles", {
   sex: text("sex"),
 });
 
+/**
+ * Which phase of a plan the targets come from. One profile holds up to four
+ * complete weekly tables — protein and fat typically stay put while calories
+ * and carbs move — and the user switches between them.
+ */
+export const goalPhaseEnum = pgEnum("goal_phase", [
+  "cut",
+  "lean_bulk",
+  "recomp",
+  "maintenance",
+]);
+
+export const GOAL_PHASES = goalPhaseEnum.enumValues;
+export type GoalPhase = (typeof GOAL_PHASES)[number];
+
 export const goalProfiles = pgTable(
   "goal_profiles",
   {
@@ -67,6 +82,8 @@ export const goalProfiles = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     isActive: boolean("is_active").notNull().default(false),
+    /** The phase currently in force. Days are pinned to it as they are created. */
+    activePhase: goalPhaseEnum("active_phase").notNull().default("maintenance"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("goal_profiles_user_idx").on(t.userId)],
@@ -79,6 +96,7 @@ export const goalDays = pgTable(
     goalProfileId: uuid("goal_profile_id")
       .notNull()
       .references(() => goalProfiles.id, { onDelete: "cascade" }),
+    phase: goalPhaseEnum("phase").notNull().default("maintenance"),
     dayOfWeek: integer("day_of_week").notNull(),
     calories: integer("calories").notNull(),
     proteinG: doublePrecision("protein_g").notNull(),
@@ -89,7 +107,9 @@ export const goalDays = pgTable(
     sodiumMgMax: doublePrecision("sodium_mg_max"),
     satFatGMax: doublePrecision("sat_fat_g_max"),
   },
-  (t) => [uniqueIndex("goal_days_profile_day_idx").on(t.goalProfileId, t.dayOfWeek)],
+  (t) => [
+    uniqueIndex("goal_days_profile_phase_day_idx").on(t.goalProfileId, t.phase, t.dayOfWeek),
+  ],
 );
 
 /** Signed macro adjustment that recurs on given weekdays, layered on the base. */
@@ -420,6 +440,13 @@ export const diaryDays = pgTable(
     goalProfileId: uuid("goal_profile_id").references(() => goalProfiles.id, {
       onDelete: "set null",
     }),
+    /**
+     * The phase in force when the day was created, pinned exactly like
+     * goalProfileId so switching phase never rewrites past targets. Null on
+     * days created before phases existed; those resolve to the profile's
+     * current phase.
+     */
+    goalPhase: goalPhaseEnum("goal_phase"),
     // Set when the user "completes" the day; the saved AI report for that day.
     completedAt: timestamp("completed_at", { withTimezone: true }),
     analysisJson: jsonb("analysis_json").$type<string[]>(),
