@@ -19,6 +19,7 @@ function payload(overrides: Partial<DiaryPayload> = {}): DiaryPayload {
       satFatGMax: null,
     },
     goalProfileId: null,
+    goalPhase: null,
     goalBreakdown: null,
     dayActivities: null,
     dayOneOffs: null,

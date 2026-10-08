@@ -38,11 +38,36 @@ export async function PATCH(
       if (seenDays.size !== 7) {
         throw new ApiError("invalid_request", "days must cover all 7 days of week", 400);
       }
+      const phase = input.phase ?? "maintenance";
       // neon-http has no transactions; replace is two sequential statements.
-      await db.delete(goalDays).where(eq(goalDays.goalProfileId, id));
+      // Scoped to the one phase — an unscoped delete would wipe the other three.
+      await db
+        .delete(goalDays)
+        .where(and(eq(goalDays.goalProfileId, id), eq(goalDays.phase, phase)));
       await db
         .insert(goalDays)
-        .values(input.days.map((day) => ({ goalProfileId: id, ...day })));
+        .values(input.days.map((day) => ({ goalProfileId: id, phase, ...day })));
+    }
+
+    if (input.activePhase && input.activePhase !== profile.activePhase) {
+      // Refuse to switch into a phase with no table behind it, which would
+      // leave the diary with no targets at all.
+      const [row] = await db
+        .select({ id: goalDays.id })
+        .from(goalDays)
+        .where(and(eq(goalDays.goalProfileId, id), eq(goalDays.phase, input.activePhase)))
+        .limit(1);
+      if (!row) {
+        throw new ApiError(
+          "invalid_request",
+          "That phase has no targets set up yet. Add its 7 days first.",
+          400,
+        );
+      }
+      await db
+        .update(goalProfiles)
+        .set({ activePhase: input.activePhase })
+        .where(eq(goalProfiles.id, id));
     }
 
     return NextResponse.json({ ok: true });

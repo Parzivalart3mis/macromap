@@ -108,6 +108,8 @@ export interface DiaryPayloadDTO {
   totals: NutritionSnapshot;
   goal: GoalDTO | null;
   goalProfileId: string | null;
+  /** The phase these targets came from, pinned when the day was created. */
+  goalPhase: GoalPhaseDTO | null;
   /** Base + activity/exception lines when the day's goal is layered; else null. */
   goalBreakdown: GoalBreakdownLineDTO[] | null;
   /** Recurring activities on this weekday with per-date state; null if none. */
@@ -266,12 +268,17 @@ export interface ActivityPresetDTO {
   deltaCarbsG: number;
 }
 
+export type GoalPhaseDTO = "cut" | "lean_bulk" | "recomp" | "maintenance";
+
 export interface GoalProfileDTO {
   id: string;
   name: string;
   isActive: boolean;
+  /** Which of the four weekly tables is currently in force. */
+  activePhase: GoalPhaseDTO;
   days: Array<{
     id: string;
+    phase: GoalPhaseDTO;
     dayOfWeek: number;
     calories: number;
     proteinG: number;

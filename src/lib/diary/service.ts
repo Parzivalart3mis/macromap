@@ -19,6 +19,7 @@ import {
   type GoalActivity,
   type GoalActivityException,
   type GoalDay,
+  type GoalPhase,
 } from "@/lib/db/schema";
 import { foodToNutrition, roundNutrition, scaleNutrition, sumNutrition } from "@/lib/nutrition";
 import { scaleServingText } from "@/lib/units";
@@ -35,14 +36,21 @@ export async function getOrCreateDiaryDay(userId: string, date: string) {
   if (existing[0]) return existing[0];
 
   const [activeGoal] = await db
-    .select({ id: goalProfiles.id })
+    .select({ id: goalProfiles.id, activePhase: goalProfiles.activePhase })
     .from(goalProfiles)
     .where(and(eq(goalProfiles.userId, userId), eq(goalProfiles.isActive, true)))
     .limit(1);
 
+  // Pin both the profile and its phase, so changing either later leaves this
+  // day's targets exactly as they were when it was logged.
   const [created] = await db
     .insert(diaryDays)
-    .values({ userId, date, goalProfileId: activeGoal?.id ?? null })
+    .values({
+      userId,
+      date,
+      goalProfileId: activeGoal?.id ?? null,
+      goalPhase: activeGoal?.activePhase ?? null,
+    })
     .onConflictDoNothing()
     .returning();
   if (created) return created;
@@ -261,6 +269,8 @@ export interface DiaryPayload {
   goal: GoalTargets | null;
   /** The pinned/active profile whose goal this day resolves to (for adjustments). */
   goalProfileId: string | null;
+  /** The phase this day's targets came from, pinned at creation. */
+  goalPhase: GoalPhase | null;
   /** Base + each active activity/exception, when the day's goal has activities. */
   goalBreakdown: GoalBreakdownLine[] | null;
   /** Recurring activities matching this weekday, with per-date state; null if none. */
@@ -403,6 +413,7 @@ export function layerGoal(
 /** Fetch base + activities + exceptions for a profile/date and layer them. */
 async function resolveGoal(
   goalProfileId: string,
+  phase: GoalPhase,
   date: string,
   dayOfWeek: number,
 ): Promise<{
@@ -411,10 +422,18 @@ async function resolveGoal(
   dayActivities: DayActivity[] | null;
   dayOneOffs: DayOneOff[] | null;
 }> {
+  // A phase the user has not filled in has no rows at all; the caller surfaces
+  // that as "this phase isn't set up" rather than silently borrowing another's.
   const [goalDay] = await db
     .select()
     .from(goalDays)
-    .where(and(eq(goalDays.goalProfileId, goalProfileId), eq(goalDays.dayOfWeek, dayOfWeek)))
+    .where(
+      and(
+        eq(goalDays.goalProfileId, goalProfileId),
+        eq(goalDays.phase, phase),
+        eq(goalDays.dayOfWeek, dayOfWeek),
+      ),
+    )
     .limit(1);
   if (!goalDay) return { goal: null, breakdown: null, dayActivities: null, dayOneOffs: null };
 
@@ -512,23 +531,31 @@ export async function getDiaryPayload(
 
   const totals = roundNutrition(sumNutrition(meals.map((meal) => meal.totals)));
 
-  // Day-of-week goal from the day's pinned profile, else the active profile.
+  // Day-of-week goal from the day's pinned profile and phase, else the active
+  // profile and its current phase. Days created before phases existed carry a
+  // null goalPhase and fall back to the profile's phase.
   const dayOfWeek = new Date(`${date}T00:00:00Z`).getUTCDay();
   let goalProfileId = day?.goalProfileId ?? null;
-  if (!goalProfileId) {
+  let goalPhase: GoalPhase | null = day?.goalPhase ?? null;
+  if (!goalProfileId || !goalPhase) {
     const [active] = await db
-      .select({ id: goalProfiles.id })
+      .select({ id: goalProfiles.id, activePhase: goalProfiles.activePhase })
       .from(goalProfiles)
-      .where(and(eq(goalProfiles.userId, userId), eq(goalProfiles.isActive, true)))
+      .where(
+        goalProfileId
+          ? eq(goalProfiles.id, goalProfileId)
+          : and(eq(goalProfiles.userId, userId), eq(goalProfiles.isActive, true)),
+      )
       .limit(1);
-    goalProfileId = active?.id ?? null;
+    goalProfileId ??= active?.id ?? null;
+    goalPhase ??= active?.activePhase ?? null;
   }
   let goal: GoalTargets | null = null;
   let goalBreakdown: GoalBreakdownLine[] | null = null;
   let dayActivities: DayActivity[] | null = null;
   let dayOneOffs: DayOneOff[] | null = null;
-  if (goalProfileId) {
-    const resolved = await resolveGoal(goalProfileId, date, dayOfWeek);
+  if (goalProfileId && goalPhase) {
+    const resolved = await resolveGoal(goalProfileId, goalPhase, date, dayOfWeek);
     goal = resolved.goal;
     goalBreakdown = resolved.breakdown;
     dayActivities = resolved.dayActivities;
@@ -541,6 +568,7 @@ export async function getDiaryPayload(
     totals,
     goal,
     goalProfileId,
+    goalPhase,
     goalBreakdown,
     dayActivities,
     dayOneOffs,

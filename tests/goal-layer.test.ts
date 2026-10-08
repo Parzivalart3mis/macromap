@@ -104,3 +104,47 @@ describe("layerGoal", () => {
     expect(layerGoal(base, bigRemoval, [], "2026-07-20", 1).goal.carbsG).toBe(0); // floored
   });
 });
+
+describe("goal phases", () => {
+  // Each phase is a complete weekly table; activities are shared across them.
+  const maintenanceMon = { calories: 2045, carbsG: 203.75, proteinG: 150, fatG: 70,
+    fiberG: null, sugarGMax: null, sodiumMgMax: null, satFatGMax: null };
+  const cutMon = { ...maintenanceMon, calories: 1445, carbsG: 53.75 };
+  const commute = [
+    act("a1", "E-bike (AM)", [1], 26.25, 0),
+    act("a2", "Bike (PM)", [1], 48.75, 1),
+    act("a3", "Walks", [1], 6.25, 2),
+    act("a4", "Shift", [1], 100, 3),
+  ];
+
+  it("layers the same activities onto whichever phase table is given", () => {
+    const m = layerGoal(maintenanceMon, commute, [], "2026-10-12", 1).goal;
+    expect(m.calories).toBe(2770);
+    expect(m.carbsG).toBe(385);
+
+    const c = layerGoal(cutMon, commute, [], "2026-10-12", 1).goal;
+    expect(c.calories).toBe(2170);
+    expect(c.carbsG).toBe(235);
+  });
+
+  it("keeps protein and fat identical across phases", () => {
+    const m = layerGoal(maintenanceMon, commute, [], "2026-10-12", 1).goal;
+    const c = layerGoal(cutMon, commute, [], "2026-10-12", 1).goal;
+    expect(m.proteinG).toBe(c.proteinG);
+    expect(m.fatG).toBe(c.fatG);
+  });
+
+  it("the cut phase still honours a skipped activity", () => {
+    const skipped = layerGoal(
+      cutMon,
+      commute,
+      [{ id: "e1", activityId: "a4", kind: "skip" as const, label: null,
+         deltaCarbsG: null, deltaProteinG: null, deltaFatG: null }],
+      "2026-10-12",
+      1,
+    ).goal;
+    // the 400 kcal shift comes back out of the cut day
+    expect(skipped.calories).toBe(2170 - 400);
+    expect(skipped.carbsG).toBe(235 - 100);
+  });
+});

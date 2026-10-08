@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import { GOAL_PHASES } from "@/lib/db/schema";
+
+export const goalPhaseSchema = z.enum(GOAL_PHASES);
+
 export const createGoalProfileSchema = z.object({
   name: z.string().min(1).max(100),
 });
@@ -19,11 +23,17 @@ export const goalDaySchema = z.object({
 export const updateGoalProfileSchema = z
   .object({
     name: z.string().min(1).max(100).optional(),
+    /** The phase the `days` belong to; defaults to maintenance for older clients. */
+    phase: goalPhaseSchema.optional(),
     days: z.array(goalDaySchema).length(7).optional(),
+    /** Switch which phase is in force. Future days pin to it; past days do not. */
+    activePhase: goalPhaseSchema.optional(),
   })
-  .refine((value) => value.name !== undefined || value.days !== undefined, {
-    message: "Provide a name or days to update",
-  });
+  .refine(
+    (value) =>
+      value.name !== undefined || value.days !== undefined || value.activePhase !== undefined,
+    { message: "Provide a name, days, or activePhase to update" },
+  );
 
 export type GoalDayInput = z.infer<typeof goalDaySchema>;
 
