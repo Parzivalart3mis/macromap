@@ -22,6 +22,14 @@ import type {
 
 export const unitSystemEnum = pgEnum("unit_system", ["metric", "imperial"]);
 
+/**
+ * Only used to pick the right coefficients in body-composition formulas, all of
+ * which are derived on male/female samples. "unspecified" is honoured by simply
+ * not estimating body fat.
+ */
+export const BIOLOGICAL_SEXES = ["male", "female", "unspecified"] as const;
+export type BiologicalSex = (typeof BIOLOGICAL_SEXES)[number];
+
 export const foodSourceTypeEnum = pgEnum("food_source_type", [
   "official_store",
   "barcode_api",
@@ -530,8 +538,15 @@ export const bodyMetricLogs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     date: date("date").notNull(),
+    /** Entered directly, or accepted from the Navy estimate the app derives. */
     bodyFatPct: doublePrecision("body_fat_pct"),
     waistCm: doublePrecision("waist_cm"),
+    /** With waist and height, enough to derive body fat by the Navy method. */
+    neckCm: doublePrecision("neck_cm"),
+    hipCm: doublePrecision("hip_cm"),
+    chestCm: doublePrecision("chest_cm"),
+    armCm: doublePrecision("arm_cm"),
+    thighCm: doublePrecision("thigh_cm"),
     notes: text("notes"),
   },
   (t) => [index("body_metric_logs_user_date_idx").on(t.userId, t.date)],
