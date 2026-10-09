@@ -19,6 +19,11 @@ export async function POST(request: Request) {
         date: input.date,
         bodyFatPct: input.bodyFatPct ?? null,
         waistCm: input.waistCm ?? null,
+        neckCm: input.neckCm ?? null,
+        hipCm: input.hipCm ?? null,
+        chestCm: input.chestCm ?? null,
+        armCm: input.armCm ?? null,
+        thighCm: input.thighCm ?? null,
         notes: input.notes ?? null,
       })
       .returning();

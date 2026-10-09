@@ -7,15 +7,30 @@ export const logWeightSchema = z.object({
   weightValue: z.number().positive(),
 });
 
+/** Circumferences, in cm. Generous bounds — these only catch typos. */
+const girth = z.number().positive().max(300).optional();
+
 export const logBodyMetricsSchema = z
   .object({
     date: dateString,
     bodyFatPct: z.number().min(0).max(100).optional(),
-    waistCm: z.number().positive().optional(),
+    waistCm: girth,
+    neckCm: girth,
+    hipCm: girth,
+    chestCm: girth,
+    armCm: girth,
+    thighCm: girth,
     notes: z.string().max(500).optional(),
   })
   .refine(
     (value) =>
-      value.bodyFatPct != null || value.waistCm != null || Boolean(value.notes),
+      value.bodyFatPct != null ||
+      value.waistCm != null ||
+      value.neckCm != null ||
+      value.hipCm != null ||
+      value.chestCm != null ||
+      value.armCm != null ||
+      value.thighCm != null ||
+      Boolean(value.notes),
     { message: "Log at least one metric" },
   );

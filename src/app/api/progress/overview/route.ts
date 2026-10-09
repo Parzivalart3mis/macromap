@@ -13,6 +13,7 @@ import {
 } from "@/lib/db/schema";
 import { getDiaryPayload, resolveGoalsForDates } from "@/lib/diary/service";
 import { getReportData } from "@/lib/reports/data";
+import type { BiologicalSexDTO } from "@/types/api";
 
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -70,7 +71,12 @@ export async function GET() {
       .orderBy(asc(bodyMetricLogs.date));
 
     const [profile] = await db
-      .select({ unitSystem: profiles.unitSystem })
+      .select({
+        unitSystem: profiles.unitSystem,
+        heightCm: profiles.heightCm,
+        sex: profiles.sex,
+        dateOfBirth: profiles.dateOfBirth,
+      })
       .from(profiles)
       .where(eq(profiles.userId, userId))
       .limit(1);
@@ -81,6 +87,11 @@ export async function GET() {
       calorieHistory,
       loggedDates,
       weightUnit,
+      // Needed to derive body fat and waist-to-height from the logged
+      // circumferences; null until the user fills them in on their profile.
+      heightCm: profile?.heightCm ?? null,
+      sex: (profile?.sex as BiologicalSexDTO | null) ?? null,
+      dateOfBirth: profile?.dateOfBirth ?? null,
       weights,
       bodyMetrics,
     });

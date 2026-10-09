@@ -243,11 +243,18 @@ export interface WeightLogDTO {
   weightValue: number;
 }
 
+export type BiologicalSexDTO = "male" | "female" | "unspecified";
+
 export interface BodyMetricLogDTO {
   id: string;
   date: string;
   bodyFatPct: number | null;
   waistCm: number | null;
+  neckCm: number | null;
+  hipCm: number | null;
+  chestCm: number | null;
+  armCm: number | null;
+  thighCm: number | null;
   notes: string | null;
 }
 
@@ -327,6 +334,10 @@ export interface ProgressOverviewDTO {
   loggedDates: string[];
   /** Weight unit from the user's profile ("kg" metric / "lb" imperial). */
   weightUnit: "kg" | "lb";
+  /** Profile facts the body-composition maths needs; null until set. */
+  heightCm: number | null;
+  sex: BiologicalSexDTO | null;
+  dateOfBirth: string | null;
   weights: WeightLogDTO[];
   bodyMetrics: BodyMetricLogDTO[];
 }
