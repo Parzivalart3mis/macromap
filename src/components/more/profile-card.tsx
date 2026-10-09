@@ -100,7 +100,10 @@ export function ProfileCard() {
                 onChange={(event) => setDisplayName(event.target.value)}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            {/* Grid children default to min-width:auto, so a date input — whose
+                intrinsic width comes from the formatted date — would otherwise
+                refuse to shrink and push past the card. */}
+            <div className="grid grid-cols-2 gap-3 [&>div]:min-w-0">
               <div className="space-y-1">
                 <Label htmlFor="unit-system">Units</Label>
                 <Select
@@ -142,9 +145,12 @@ export function ProfileCard() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="dob">Date of birth</Label>
+                {/* Safari gives date inputs an intrinsic width and centres the
+                    text; both are overridden so it matches its neighbours. */}
                 <Input
                   id="dob"
                   type="date"
+                  className="w-full appearance-none text-left [&::-webkit-date-and-time-value]:text-left"
                   value={dateOfBirth}
                   onChange={(event) => setDateOfBirth(event.target.value)}
                 />
