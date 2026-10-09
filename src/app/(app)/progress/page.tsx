@@ -23,9 +23,70 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { bodyComposition, navyBodyFatPct, waistToHeight } from "@/lib/body/composition";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
-import type { ProgressOverviewDTO } from "@/types/api";
+import type { BiologicalSexDTO, ProgressOverviewDTO } from "@/types/api";
+
+/**
+ * What the most recent measurement implies: waist-to-height with its band, and
+ * the lean/fat split against the latest weight. Each row is skipped when its
+ * inputs are missing rather than shown as a blank.
+ */
+function LatestComposition({ overview }: { overview: ProgressOverviewDTO }) {
+  const latest = overview.bodyMetrics[overview.bodyMetrics.length - 1];
+  const latestWeight = overview.weights[overview.weights.length - 1]?.weightValue ?? null;
+  if (!latest) return null;
+
+  const whtr = waistToHeight(latest.waistCm, overview.heightCm);
+  const bf =
+    latest.bodyFatPct ??
+    navyBodyFatPct({
+      sex: overview.sex,
+      heightCm: overview.heightCm,
+      waistCm: latest.waistCm,
+      neckCm: latest.neckCm,
+      hipCm: latest.hipCm,
+    });
+  const split = bodyComposition(latestWeight, bf);
+  if (!whtr && bf == null && !split) {
+    // Nothing derivable — usually height or sex missing on the profile.
+    return overview.heightCm == null ? (
+      <p className="mb-3 rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+        Add your height on the profile screen to see waist-to-height and a body
+        fat estimate.
+      </p>
+    ) : null;
+  }
+
+  return (
+    <dl className="mb-3 grid grid-cols-3 gap-2 text-center">
+      {whtr ? (
+        <div className="rounded-xl bg-muted/60 px-2 py-2">
+          <dt className="text-xs text-muted-foreground">Waist / height</dt>
+          <dd className="font-semibold tabular-nums">{whtr.ratio.toFixed(2)}</dd>
+          <dd className="text-xs text-muted-foreground">{whtr.label}</dd>
+        </div>
+      ) : null}
+      {bf != null ? (
+        <div className="rounded-xl bg-muted/60 px-2 py-2">
+          <dt className="text-xs text-muted-foreground">Body fat</dt>
+          <dd className="font-semibold tabular-nums">{bf}%</dd>
+          <dd className="text-xs text-muted-foreground">
+            {latest.bodyFatPct != null ? "entered" : "estimated"}
+          </dd>
+        </div>
+      ) : null}
+      {split ? (
+        <div className="rounded-xl bg-muted/60 px-2 py-2">
+          <dt className="text-xs text-muted-foreground">Lean mass</dt>
+          <dd className="font-semibold tabular-nums">{split.leanKg} kg</dd>
+          <dd className="text-xs text-muted-foreground">{split.fatKg} kg fat</dd>
+        </div>
+      ) : null}
+    </dl>
+  );
+}
 
 function LogWeightDialog({
   open,
@@ -98,24 +159,55 @@ function LogWeightDialog({
   );
 }
 
+/** The optional circumferences, behind a disclosure so the dialog stays short. */
+const EXTRA_GIRTHS = [
+  { key: "hip", label: "Hip" },
+  { key: "chest", label: "Chest" },
+  { key: "arm", label: "Arm" },
+  { key: "thigh", label: "Thigh" },
+] as const;
+type GirthKey = "waist" | "neck" | (typeof EXTRA_GIRTHS)[number]["key"];
+
 function LogMetricsDialog({
   open,
   onOpenChange,
   onLogged,
+  heightCm,
+  sex,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLogged: () => void;
+  heightCm: number | null;
+  sex: BiologicalSexDTO | null;
 }) {
   const [bodyFat, setBodyFat] = useState("");
-  const [waist, setWaist] = useState("");
+  const [girths, setGirths] = useState<Record<GirthKey, string>>({
+    waist: "", neck: "", hip: "", chest: "", arm: "", thigh: "",
+  });
+  const [showMore, setShowMore] = useState(false);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const num = (key: GirthKey) => (girths[key] ? Number(girths[key]) : null);
+  const setGirth = (key: GirthKey, value: string) =>
+    setGirths((prev) => ({ ...prev, [key]: value }));
+
+  // Shown live as you type, so you can see the estimate before saving.
+  const estimated = navyBodyFatPct({
+    sex, heightCm, waistCm: num("waist"), neckCm: num("neck"), hipCm: num("hip"),
+  });
+  const whtr = waistToHeight(num("waist"), heightCm);
+
   async function save() {
-    const bodyFatPct = bodyFat ? Number(bodyFat) : undefined;
-    const waistCm = waist ? Number(waist) : undefined;
-    if (bodyFatPct == null && waistCm == null && !notes.trim()) {
+    const bodyFatPct = bodyFat ? Number(bodyFat) : (estimated ?? undefined);
+    const body: Record<string, unknown> = { date: todayISO(), bodyFatPct };
+    for (const key of ["waist", "neck", "hip", "chest", "arm", "thigh"] as GirthKey[]) {
+      const v = num(key);
+      if (v != null) body[`${key}Cm`] = v;
+    }
+    if (notes.trim()) body.notes = notes.trim();
+    if (bodyFatPct == null && Object.keys(body).length === 2) {
       toast.error("Log at least one metric");
       return;
     }
@@ -123,16 +215,11 @@ function LogMetricsDialog({
     try {
       await apiFetch("/api/progress/body-metrics", {
         method: "POST",
-        body: JSON.stringify({
-          date: todayISO(),
-          bodyFatPct,
-          waistCm,
-          notes: notes.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       toast.success("Body metrics logged");
       setBodyFat("");
-      setWaist("");
+      setGirths({ waist: "", neck: "", hip: "", chest: "", arm: "", thigh: "" });
       setNotes("");
       onOpenChange(false);
       onLogged();
@@ -148,34 +235,99 @@ function LogMetricsDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Log body metrics</DialogTitle>
-          <DialogDescription>Body fat, waist, or a note for today</DialogDescription>
+          <DialogDescription>
+            Measure first thing, before eating. Waist at the navel, neck just below
+            the larynx.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="body-fat">Body fat %</Label>
-            <Input
-              id="body-fat"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              max={100}
-              step={0.1}
-              value={bodyFat}
-              onChange={(event) => setBodyFat(event.target.value)}
-            />
+          {(
+            [
+              ["waist", "Waist (cm)"],
+              ["neck", "Neck (cm)"],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key} className="space-y-1">
+              <Label htmlFor={key}>{label}</Label>
+              <Input
+                id={key}
+                type="number"
+                inputMode="decimal"
+                min={1}
+                step={0.1}
+                value={girths[key]}
+                onChange={(event) => setGirth(key, event.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* What those two measurements imply, before anything is saved. */}
+        {estimated != null || whtr ? (
+          <div className="space-y-1 rounded-xl bg-muted/60 px-3 py-2 text-sm">
+            {estimated != null ? (
+              <p>
+                Estimated body fat{" "}
+                <span className="font-semibold text-primary">{estimated}%</span>
+                <span className="text-muted-foreground"> · Navy method, ±3–4%</span>
+              </p>
+            ) : null}
+            {whtr ? (
+              <p>
+                Waist-to-height{" "}
+                <span className="font-semibold text-primary">{whtr.ratio.toFixed(2)}</span>
+                <span className="text-muted-foreground"> · {whtr.label}</span>
+                {whtr.nextBandCm != null ? (
+                  <span className="text-muted-foreground">
+                    {" "}— {whtr.nextBandCm} cm reaches the next band
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="waist">Waist (cm)</Label>
-            <Input
-              id="waist"
-              type="number"
-              inputMode="decimal"
-              min={1}
-              step={0.1}
-              value={waist}
-              onChange={(event) => setWaist(event.target.value)}
-            />
+        ) : null}
+
+        <button
+          type="button"
+          className="self-start text-sm font-semibold text-primary"
+          onClick={() => setShowMore((v) => !v)}
+        >
+          {showMore ? "Fewer measurements" : "More measurements (hip, chest, arm, thigh)"}
+        </button>
+        {showMore ? (
+          <div className="animate-fade-up grid grid-cols-2 gap-3">
+            {EXTRA_GIRTHS.map(({ key, label }) => (
+              <div key={key} className="space-y-1">
+                <Label htmlFor={key}>{label} (cm)</Label>
+                <Input
+                  id={key}
+                  type="number"
+                  inputMode="decimal"
+                  min={1}
+                  step={0.1}
+                  value={girths[key]}
+                  onChange={(event) => setGirth(key, event.target.value)}
+                />
+              </div>
+            ))}
           </div>
+        ) : null}
+
+        <div className="space-y-1">
+          <Label htmlFor="body-fat">
+            Body fat % {estimated != null ? "(leave blank to use the estimate)" : ""}
+          </Label>
+          <Input
+            id="body-fat"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            max={100}
+            step={0.1}
+            placeholder={estimated != null ? String(estimated) : undefined}
+            value={bodyFat}
+            onChange={(event) => setBodyFat(event.target.value)}
+          />
         </div>
         <div className="space-y-1">
           <Label htmlFor="metric-notes">Notes</Label>
@@ -332,24 +484,29 @@ export default function ProgressPage() {
                 <EmptyState
                   icon={Ruler}
                   title="No measurements yet"
-                  body="Track body fat and waist alongside your weight."
+                  body="Waist and neck are enough to estimate body fat."
                 />
               ) : (
-                <ul className="divide-y text-sm">
-                  {[...overview.bodyMetrics].reverse().map((metric) => (
-                    <li key={metric.id} className="flex justify-between gap-3 py-2">
-                      <span className="text-muted-foreground">{metric.date}</span>
-                      <span className="tabular-nums">
-                        {metric.bodyFatPct != null ? `${metric.bodyFatPct}% bf` : ""}
-                        {metric.bodyFatPct != null && metric.waistCm != null ? " · " : ""}
-                        {metric.waistCm != null ? `${metric.waistCm} cm waist` : ""}
-                        {metric.notes && metric.bodyFatPct == null && metric.waistCm == null
-                          ? metric.notes
-                          : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <LatestComposition overview={overview} />
+                  <ul className="divide-y text-sm">
+                    {[...overview.bodyMetrics].reverse().map((metric) => {
+                      const parts = [
+                        metric.bodyFatPct != null ? `${metric.bodyFatPct}% bf` : null,
+                        metric.waistCm != null ? `${metric.waistCm} cm waist` : null,
+                        metric.neckCm != null ? `${metric.neckCm} cm neck` : null,
+                      ].filter(Boolean);
+                      return (
+                        <li key={metric.id} className="flex justify-between gap-3 py-2">
+                          <span className="text-muted-foreground">{metric.date}</span>
+                          <span className="tabular-nums">
+                            {parts.length ? parts.join(" · ") : (metric.notes ?? "")}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               )}
             </CardContent>
           </Card>
@@ -362,7 +519,13 @@ export default function ProgressPage() {
         onLogged={load}
         unit={overview?.weightUnit ?? "kg"}
       />
-      <LogMetricsDialog open={metricsOpen} onOpenChange={setMetricsOpen} onLogged={load} />
+      <LogMetricsDialog
+        open={metricsOpen}
+        onOpenChange={setMetricsOpen}
+        onLogged={load}
+        heightCm={overview?.heightCm ?? null}
+        sex={overview?.sex ?? null}
+      />
     </main>
   );
 }

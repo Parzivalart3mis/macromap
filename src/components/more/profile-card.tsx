@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/client/fetcher";
+import type { BiologicalSexDTO } from "@/types/api";
 
 interface MePayload {
   user: { id: string; email: string | null; displayName: string | null };
@@ -23,6 +24,8 @@ interface MePayload {
     timezone: string;
     unitSystem: "metric" | "imperial";
     heightCm: number | null;
+    sex: BiologicalSexDTO | null;
+    dateOfBirth: string | null;
   };
 }
 
@@ -31,6 +34,9 @@ export function ProfileCard() {
   const [displayName, setDisplayName] = useState("");
   const [unitSystem, setUnitSystem] = useState<"metric" | "imperial">("metric");
   const [heightCm, setHeightCm] = useState("");
+  // Only used to pick body-composition coefficients, so it defaults to opting out.
+  const [sex, setSex] = useState<BiologicalSexDTO>("unspecified");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -40,6 +46,8 @@ export function ProfileCard() {
       setDisplayName(data.user.displayName ?? "");
       setUnitSystem(data.profile.unitSystem);
       setHeightCm(data.profile.heightCm ? String(data.profile.heightCm) : "");
+      setSex(data.profile.sex ?? "unspecified");
+      setDateOfBirth(data.profile.dateOfBirth ?? "");
     } catch {
       toast.error("Could not load your profile");
     }
@@ -58,6 +66,8 @@ export function ProfileCard() {
       };
       if (displayName.trim()) payload.displayName = displayName.trim();
       if (heightCm && Number(heightCm) > 0) payload.heightCm = Number(heightCm);
+      payload.sex = sex;
+      payload.dateOfBirth = dateOfBirth || null;
       await apiFetch("/api/me/profile", {
         method: "PATCH",
         body: JSON.stringify(payload),
@@ -117,7 +127,34 @@ export function ProfileCard() {
                   onChange={(event) => setHeightCm(event.target.value)}
                 />
               </div>
+              <div className="space-y-1">
+                <Label htmlFor="sex">Sex</Label>
+                <Select value={sex} onValueChange={(v) => setSex(v as BiologicalSexDTO)}>
+                  <SelectTrigger id="sex" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="unspecified">Prefer not to say</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="dob">Date of birth</Label>
+                <Input
+                  id="dob"
+                  type="date"
+                  value={dateOfBirth}
+                  onChange={(event) => setDateOfBirth(event.target.value)}
+                />
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Sex and height are used only to estimate body fat from your
+              measurements. Choosing &ldquo;prefer not to say&rdquo; simply skips that
+              estimate.
+            </p>
             <Button disabled={busy} onClick={save} className="w-full">
               {busy ? "Saving..." : "Save profile"}
             </Button>
