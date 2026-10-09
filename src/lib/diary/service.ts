@@ -465,6 +465,104 @@ async function resolveGoal(
   };
 }
 
+/**
+ * The one weekly-target row for a given profile, phase and weekday.
+ *
+ * Pulled out because reading `goal_days` without filtering on phase is a live
+ * hazard: a profile holds up to four complete tables, so an unfiltered lookup
+ * silently returns whichever phase the database happened to order last.
+ */
+export function selectGoalDay<
+  T extends { goalProfileId: string; phase: GoalPhase; dayOfWeek: number },
+>(rows: T[], profileId: string, phase: GoalPhase, dayOfWeek: number): T | undefined {
+  return rows.find(
+    (r) => r.goalProfileId === profileId && r.phase === phase && r.dayOfWeek === dayOfWeek,
+  );
+}
+
+/**
+ * Daily targets for a run of dates, resolved the same way the diary resolves a
+ * single day: each date uses its own pinned profile and phase, falling back to
+ * the active profile for dates with no diary row yet, and activities are
+ * layered on with that date's exceptions applied.
+ *
+ * Exists so charts cannot drift from the diary. The Progress chart previously
+ * read `goal_days.calories` directly, which ignored activities and — once a
+ * profile could hold four phases — silently picked an arbitrary one.
+ *
+ * Four queries regardless of how many dates are asked for.
+ */
+export async function resolveGoalsForDates(
+  userId: string,
+  dates: string[],
+): Promise<Map<string, GoalTargets | null>> {
+  const result = new Map<string, GoalTargets | null>(dates.map((d) => [d, null]));
+  if (dates.length === 0) return result;
+
+  const [dayRows, activeRows] = await Promise.all([
+    db
+      .select({
+        date: diaryDays.date,
+        goalProfileId: diaryDays.goalProfileId,
+        goalPhase: diaryDays.goalPhase,
+      })
+      .from(diaryDays)
+      .where(and(eq(diaryDays.userId, userId), inArray(diaryDays.date, dates))),
+    db
+      .select({ id: goalProfiles.id, activePhase: goalProfiles.activePhase })
+      .from(goalProfiles)
+      .where(and(eq(goalProfiles.userId, userId), eq(goalProfiles.isActive, true)))
+      .limit(1),
+  ]);
+  const active = activeRows[0];
+  const pinned = new Map(dayRows.map((d) => [d.date, d]));
+
+  // Which (profile, phase) each date resolves to, and the profiles involved.
+  const resolved = new Map<string, { profileId: string; phase: GoalPhase }>();
+  for (const date of dates) {
+    const day = pinned.get(date);
+    const profileId = day?.goalProfileId ?? active?.id ?? null;
+    if (!profileId) continue;
+    const phase =
+      day?.goalPhase ??
+      (day?.goalProfileId && day.goalProfileId !== active?.id
+        ? "maintenance" // a day pinned to another profile predates phases
+        : (active?.activePhase ?? "maintenance"));
+    resolved.set(date, { profileId, phase });
+  }
+  const profileIds = [...new Set([...resolved.values()].map((r) => r.profileId))];
+  if (profileIds.length === 0) return result;
+
+  const [dayTargets, activities, exceptions] = await Promise.all([
+    db.select().from(goalDays).where(inArray(goalDays.goalProfileId, profileIds)),
+    db.select().from(goalActivities).where(inArray(goalActivities.goalProfileId, profileIds)),
+    db
+      .select()
+      .from(goalActivityExceptions)
+      .where(
+        and(
+          inArray(goalActivityExceptions.goalProfileId, profileIds),
+          inArray(goalActivityExceptions.date, dates),
+        ),
+      ),
+  ]);
+
+  for (const [date, { profileId, phase }] of resolved) {
+    const dayOfWeek = new Date(`${date}T00:00:00Z`).getUTCDay();
+    const base = selectGoalDay(dayTargets, profileId, phase, dayOfWeek);
+    if (!base) continue; // that phase has no table — no target rather than a wrong one
+    const { goal } = layerGoal(
+      base,
+      activities.filter((a) => a.goalProfileId === profileId),
+      exceptions.filter((e) => e.goalProfileId === profileId && e.date === date),
+      date,
+      dayOfWeek,
+    );
+    result.set(date, goal);
+  }
+  return result;
+}
+
 export async function getDiaryPayload(
   userId: string,
   date: string,

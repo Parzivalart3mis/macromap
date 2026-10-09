@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { layerGoal } from "@/lib/diary/service";
+import { layerGoal, selectGoalDay } from "@/lib/diary/service";
 
 // Base = the rest-day floor from Workout #5 - Updated.
 const base = {
@@ -146,5 +146,43 @@ describe("goal phases", () => {
     // the 400 kcal shift comes back out of the cut day
     expect(skipped.calories).toBe(2170 - 400);
     expect(skipped.carbsG).toBe(235 - 100);
+  });
+});
+
+describe("selectGoalDay", () => {
+  // A profile holding all four weekly tables: 4 phases x 7 weekdays.
+  const PHASES = ["cut", "lean_bulk", "recomp", "maintenance"] as const;
+  const CAL: Record<(typeof PHASES)[number], number> = {
+    cut: 1445, lean_bulk: 2295, recomp: 1855, maintenance: 2045,
+  };
+  const rows = PHASES.flatMap((phase) =>
+    Array.from({ length: 7 }, (_, dayOfWeek) => ({
+      goalProfileId: "p1", phase, dayOfWeek, calories: CAL[phase],
+    })),
+  );
+
+  it("picks the row for the requested phase", () => {
+    for (const phase of PHASES) {
+      expect(selectGoalDay(rows, "p1", phase, 4)?.calories).toBe(CAL[phase]);
+    }
+  });
+
+  it("does not leak another phase's targets (the Progress chart regression)", () => {
+    // The chart showed Thursday as 1445 — the cut base — while the profile was
+    // on maintenance, because the lookup ignored phase entirely.
+    const thursday = selectGoalDay(rows, "p1", "maintenance", 4);
+    expect(thursday?.calories).toBe(2045);
+    expect(thursday?.calories).not.toBe(1445);
+  });
+
+  it("keeps profiles apart", () => {
+    const mixed = [...rows, { goalProfileId: "p2", phase: "maintenance" as const, dayOfWeek: 4, calories: 9999 }];
+    expect(selectGoalDay(mixed, "p1", "maintenance", 4)?.calories).toBe(2045);
+    expect(selectGoalDay(mixed, "p2", "maintenance", 4)?.calories).toBe(9999);
+  });
+
+  it("returns undefined for a phase with no table", () => {
+    const onlyMaintenance = rows.filter((r) => r.phase === "maintenance");
+    expect(selectGoalDay(onlyMaintenance, "p1", "cut", 4)).toBeUndefined();
   });
 });

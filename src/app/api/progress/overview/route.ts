@@ -8,12 +8,10 @@ import {
   diaryDays,
   diaryEntries,
   diaryMeals,
-  goalDays,
-  goalProfiles,
   profiles,
   weightLogs,
 } from "@/lib/db/schema";
-import { getDiaryPayload } from "@/lib/diary/service";
+import { getDiaryPayload, resolveGoalsForDates } from "@/lib/diary/service";
 import { getReportData } from "@/lib/reports/data";
 
 function isoDate(date: Date): string {
@@ -35,32 +33,19 @@ export async function GET() {
       getReportData(userId, twoWeeksAgo, today),
     ]);
 
-    // Map each weekday to its goal calories from the active profile.
-    const [activeProfile] = await db
-      .select({ id: goalProfiles.id })
-      .from(goalProfiles)
-      .where(and(eq(goalProfiles.userId, userId), eq(goalProfiles.isActive, true)))
-      .limit(1);
-    const goalByDow = new Map<number, number>();
-    if (activeProfile) {
-      const days = await db
-        .select()
-        .from(goalDays)
-        .where(eq(goalDays.goalProfileId, activeProfile.id));
-      for (const day of days) goalByDow.set(day.dayOfWeek, day.calories);
-    }
+    // Targets come from the same resolver the diary uses, so the dashed line
+    // always matches what that day actually showed: the day's own pinned
+    // profile and phase, with activities and exceptions layered on.
+    const historyDates = Array.from({ length: 14 }, (_, i) =>
+      isoDate(new Date(now.getTime() - (13 - i) * 86_400_000)),
+    );
+    const goalsByDate = await resolveGoalsForDates(userId, historyDates);
 
-    const calorieHistory: Array<{ date: string; calories: number; goal: number | null }> = [];
-    for (let i = 13; i >= 0; i--) {
-      const date = isoDate(new Date(now.getTime() - i * 86_400_000));
-      const day = recent.days.find((d) => d.date === date);
-      const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
-      calorieHistory.push({
-        date,
-        calories: day?.totals.calories ?? 0,
-        goal: goalByDow.get(dow) ?? null,
-      });
-    }
+    const calorieHistory = historyDates.map((date) => ({
+      date,
+      calories: recent.days.find((d) => d.date === date)?.totals.calories ?? 0,
+      goal: goalsByDate.get(date)?.calories ?? null,
+    }));
 
     // Distinct dates in the last 12 weeks that have at least one logged entry,
     // for the consistency heatmap.
