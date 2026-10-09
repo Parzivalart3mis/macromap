@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { EmptyState, ErrorState, ListSkeleton, Spinner } from "@/components/async-states";
 import { MacroMeter } from "@/components/nutrition/macro-meter";
 import {
+  BodyMetricChart,
   CalorieHistoryChart,
   LoggedDaysHeatmap,
   WeightChart,
@@ -489,6 +490,13 @@ export default function ProgressPage() {
               ) : (
                 <>
                   <LatestComposition overview={overview} />
+                  <BodyMetricChart
+                    metrics={overview.bodyMetrics}
+                    weights={overview.weights}
+                    heightCm={overview.heightCm}
+                    sex={overview.sex}
+                    weightUnit={overview.weightUnit}
+                  />
                   <ul className="divide-y text-sm">
                     {[...overview.bodyMetrics].reverse().map((metric) => {
                       const parts = [
