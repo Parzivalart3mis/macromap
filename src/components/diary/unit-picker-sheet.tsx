@@ -63,9 +63,16 @@ export function UnitPickerSheet({
 }
 
 /**
- * The "Serving Size" row that opens the picker. Renders as plain, non-tappable
- * text when there is nothing to choose from (custom store builds, quick adds,
- * or while the food is still loading) so it never reads as a dead control.
+ * The "Serving Size" row that opens the picker. When there is nothing to choose
+ * from — a food with a single unit, a custom store build, a quick add, or a food
+ * still loading — it renders as plain text rather than a control, so tapping it
+ * never opens a sheet with one option in it.
+ *
+ * That text stays in the normal foreground colour. Muting it was the obvious
+ * thing to reach for and the wrong one: a greyed value is the convention for a
+ * control that is disabled or still loading, so a food that simply comes in one
+ * size looked broken. Nothing here is unavailable — "1 can" is the answer, not
+ * a withheld choice — so it is styled as the fact it is.
  */
 export function ServingSizeRow({
   value,
@@ -80,7 +87,7 @@ export function ServingSizeRow({
     return (
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <span className="font-medium">Serving Size</span>
-        <span className="py-1.5 font-semibold text-muted-foreground">{value}</span>
+        <span className="py-1.5 font-semibold">{value}</span>
       </div>
     );
   }
