@@ -12,7 +12,14 @@ import type { FoodDTO, RecentItemDTO } from "@/types/api";
  * enough to re-log it verbatim. Frequency ranking lives in the Frequent tab, so
  * this is pure recency. We over-fetch recent rows and de-duplicate in JS by
  * food / order / quick-add-label so one repeated item doesn't crowd the list.
+ *
+ * The list is capped well above what the tab shows at rest, because typing
+ * filters this payload in the browser: a cap at the visible length means a
+ * search can only ever find what is already on screen. The tab trims itself
+ * for display instead. At ~900 bytes an item this stays under 100 KB.
  */
+const MAX_ITEMS = 100;
+
 export async function GET() {
   try {
     const userId = await requireUserId();
@@ -80,7 +87,7 @@ export async function GET() {
       if (seen.has(key)) continue;
       seen.add(key);
       recent.push(item);
-      if (recent.length >= 20) break;
+      if (recent.length >= MAX_ITEMS) break;
     }
 
     return NextResponse.json({ recent });

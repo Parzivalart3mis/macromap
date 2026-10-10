@@ -112,6 +112,9 @@ function foodSubtitle(food: FoodDTO, quantity = 1): string {
  * History line: the serving exactly as last logged, without the size
  * parenthetical — "1 large · 121 cal", not "1 large (136 g)" or "118 g".
  */
+/** Rows the Recent tab shows before you type; the payload carries far more. */
+const RECENT_VISIBLE = 20;
+
 function recentSubtitle(item: RecentItem): string {
   if (item.kind === "order") {
     const base = item.brand ? `${item.brand} · custom build` : "Custom build";
@@ -1159,6 +1162,10 @@ function AddFoodView() {
   const q = normalizeQuery(query);
   const filtering = q.length > 0 && !submitted;
   const recentFiltered = recent?.filter((item) => matchesFields(q, recentFields(item))) ?? null;
+  // At rest the tab stays a short recency list; a query searches the whole
+  // payload, so an item sitting past the twentieth is still findable.
+  const recentVisible = filtering ? recentFiltered : (recentFiltered?.slice(0, RECENT_VISIBLE) ?? null);
+  const recentHiddenCount = (recentFiltered?.length ?? 0) - (recentVisible?.length ?? 0);
   const frequentFiltered = frequent?.filter((item) => matchesFields(q, recentFields(item))) ?? null;
   const mealsFiltered = savedMeals?.filter((meal) => matchesFields(q, [meal.name])) ?? null;
   const recipesFiltered =
@@ -1604,12 +1611,12 @@ function AddFoodView() {
                       <p className="px-1 text-lg font-extrabold tracking-tight">
                         Recently logged
                       </p>
-                      {recentFiltered && recentFiltered.length > 0 ? selectToggle : null}
+                      {recentVisible && recentVisible.length > 0 ? selectToggle : null}
                     </div>
                   ) : null}
-                  {recentFiltered === null ? (
+                  {recentVisible === null ? (
                     <ListSkeleton rows={4} />
-                  ) : recentFiltered.length === 0 ? (
+                  ) : recentVisible.length === 0 ? (
                     <EmptyState
                       title={filtering ? "No matches in your history" : "Nothing logged yet"}
                       body={
@@ -1619,9 +1626,17 @@ function AddFoodView() {
                       }
                     />
                   ) : (
-                    <div className="stagger-children space-y-2">
-                      {recentFiltered.map(recentRow)}
-                    </div>
+                    <>
+                      <div className="stagger-children space-y-2">
+                        {recentVisible.map(recentRow)}
+                      </div>
+                      {recentHiddenCount > 0 ? (
+                        <p className="px-1 pt-3 text-xs text-muted-foreground">
+                          {recentHiddenCount} older {recentHiddenCount === 1 ? "item" : "items"} not
+                          shown — start typing to search all of them.
+                        </p>
+                      ) : null}
+                    </>
                   )}
                 </TabsContent>
 
