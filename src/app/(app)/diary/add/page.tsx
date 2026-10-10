@@ -42,6 +42,12 @@ import { apiFetch } from "@/lib/client/fetcher";
 import { haptic } from "@/lib/client/haptics";
 import { imageToBase64 } from "@/lib/client/image";
 import { todayISO } from "@/lib/dates";
+import {
+  foodFields,
+  matchesFields,
+  normalizeQuery,
+  recentFields,
+} from "@/lib/search/match";
 import { nativeServingLabel, nativeServingTextFor } from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type {
@@ -1148,14 +1154,17 @@ function AddFoodView() {
   ];
 
   // While typing (before submit), the tabs stay and filter locally by the query.
-  const q = query.trim().toLowerCase();
+  // Matching covers every field the row displays — brand included — so typing
+  // and submitting agree on what counts as a hit.
+  const q = normalizeQuery(query);
   const filtering = q.length > 0 && !submitted;
-  const matchesQuery = (name: string) => !q || name.toLowerCase().includes(q);
-  const recentFiltered = recent?.filter((item) => matchesQuery(recentName(item))) ?? null;
-  const frequentFiltered = frequent?.filter((item) => matchesQuery(recentName(item))) ?? null;
-  const mealsFiltered = savedMeals?.filter((meal) => matchesQuery(meal.name)) ?? null;
-  const recipesFiltered = myFoods?.filter((food) => food.isRecipe && matchesQuery(food.name)) ?? null;
-  const foodsFiltered = myFoods?.filter((food) => !food.isRecipe && matchesQuery(food.name)) ?? null;
+  const recentFiltered = recent?.filter((item) => matchesFields(q, recentFields(item))) ?? null;
+  const frequentFiltered = frequent?.filter((item) => matchesFields(q, recentFields(item))) ?? null;
+  const mealsFiltered = savedMeals?.filter((meal) => matchesFields(q, [meal.name])) ?? null;
+  const recipesFiltered =
+    myFoods?.filter((food) => food.isRecipe && matchesFields(q, foodFields(food))) ?? null;
+  const foodsFiltered =
+    myFoods?.filter((food) => !food.isRecipe && matchesFields(q, foodFields(food))) ?? null;
 
   // Client-side filter + sort over the server-ranked results.
   const displayedResults = (() => {
