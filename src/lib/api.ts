@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import type { ZodType } from "zod";
 
@@ -53,6 +54,29 @@ export async function requireDbUser(): Promise<string> {
     })
     .onConflictDoNothing({ target: users.id });
   return session.userId;
+}
+
+/** True when this user may curate the shared catalogue. Never throws. */
+export async function isAdmin(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.role === "admin";
+}
+
+/**
+ * Auth plus an admin check, for the routes that curate shared data rather than
+ * the caller's own: marking a food verified, and a chain store's menu. Returns
+ * 403 rather than 404 so the caller can tell "not allowed" from "not there".
+ */
+export async function requireAdmin(): Promise<string> {
+  const userId = await requireDbUser();
+  if (!(await isAdmin(userId))) {
+    throw new ApiError("forbidden", "Admin access required", 403);
+  }
+  return userId;
 }
 
 export async function parseBody<T>(request: Request, schema: ZodType<T>): Promise<T> {

@@ -15,6 +15,9 @@ export async function GET() {
       .where(eq(profiles.userId, userId))
       .limit(1);
     return NextResponse.json({
+      // Surfaced so the client can show curation controls; every admin-only
+      // route re-checks server-side rather than trusting this.
+      isAdmin: user?.role === "admin",
       user: user ?? { id: userId, email: null, displayName: null },
       profile: profile ?? {
         userId,

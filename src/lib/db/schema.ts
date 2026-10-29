@@ -23,6 +23,15 @@ import type {
 export const unitSystemEnum = pgEnum("unit_system", ["metric", "imperial"]);
 
 /**
+ * The shared food database is open-write by design, but a few things are not:
+ * marking an entry verified, and curating a chain store's menu. Those are the
+ * admin's to do, because a verified badge anyone can award means nothing.
+ */
+export const userRoleEnum = pgEnum("user_role", ["member", "admin"]);
+export const USER_ROLES = userRoleEnum.enumValues;
+export type UserRole = (typeof USER_ROLES)[number];
+
+/**
  * Only used to pick the right coefficients in body-composition formulas, all of
  * which are derived on male/female samples. "unspecified" is honoured by simply
  * not estimating body fat.
@@ -51,6 +60,9 @@ export const users = pgTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   displayName: text("display_name"),
+  // Deliberately not settable through any request schema — the Clerk webhook
+  // upserts only email and display name, so a sign-in never rewrites it.
+  role: userRoleEnum("role").notNull().default("member"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -71,6 +71,13 @@
       "when": 1791556024855,
       "tag": "0009_striped_mole_man",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793279733304,
+      "tag": "0010_chemical_deathbird",
+      "breakpoints": true
     }
   ]
 }
