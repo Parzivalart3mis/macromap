@@ -1,4 +1,14 @@
-import { AlertTriangle, Barcode, Copy, Database, Store, UserRound } from "lucide-react";
+import {
+  AlertTriangle,
+  Barcode,
+  Camera,
+  ChevronRight,
+  Copy,
+  Database,
+  Store,
+  UserRound,
+} from "lucide-react";
+import Link from "next/link";
 
 import { SubHeader } from "@/components/more/sub-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +56,22 @@ export default async function AdminPage() {
     <main>
       <SubHeader title="Admin" />
       <div className="stagger-children space-y-4 p-4">
+        <Link
+          href="/more/admin/foods/new"
+          className="card-lift flex items-center gap-3 rounded-2xl border bg-card p-4 shadow-[var(--shadow-soft)]"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary">
+            <Camera className="size-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Add a verified item</span>
+            <span className="block text-xs text-muted-foreground">
+              Photograph the package — front, panel, barcode — and place it in a store
+            </span>
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </Link>
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">

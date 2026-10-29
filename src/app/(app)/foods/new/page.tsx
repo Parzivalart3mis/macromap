@@ -18,6 +18,13 @@ import {
 } from "@/components/ui/sheet";
 import { apiFetch } from "@/lib/client/fetcher";
 import { imageToBase64 } from "@/lib/client/image";
+import {
+  API_DEFAULT_ZERO,
+  NUTRITION_FIELDS,
+  decimalOnly,
+  parseServing,
+  type ScannedLabel,
+} from "@/lib/foods/label-fields";
 
 interface SimilarFood {
   id: string;
@@ -32,68 +39,12 @@ type CreateResponse =
 
 // Nutrition step, in the order the label reads. Only Calories is user-required;
 // protein/carbs/fat are optional in the UI but sent as 0 (the API needs them).
-const NUTRITION_FIELDS = [
-  { key: "calories", label: "Calories", required: true },
-  { key: "fatG", label: "Total Fat (g)" },
-  { key: "satFatG", label: "Saturated Fat (g)" },
-  { key: "polyUnsatFatG", label: "Polyunsaturated Fat (g)" },
-  { key: "monoUnsatFatG", label: "Monounsaturated (g)" },
-  { key: "transFatG", label: "Trans Fat (g)" },
-  { key: "cholesterolMg", label: "Cholesterol (mg)" },
-  { key: "sodiumMg", label: "Sodium (mg)" },
-  { key: "potassiumMg", label: "Potassium (mg)" },
-  { key: "carbsG", label: "Total Carbohydrates (g)" },
-  { key: "fiberG", label: "Dietary Fiber (g)" },
-  { key: "sugarG", label: "Sugars (g)" },
-  { key: "addedSugarsG", label: "Added Sugars (g)" },
-  { key: "sugarAlcoholsG", label: "Sugar Alcohols (g)" },
-  { key: "proteinG", label: "Protein (g)" },
-  { key: "vitaminAPct", label: "Vitamin A (% DV)" },
-  { key: "vitaminCPct", label: "Vitamin C (% DV)" },
-  { key: "calciumPct", label: "Calcium (% DV)" },
-  { key: "ironPct", label: "Iron (% DV)" },
-  { key: "vitaminDPct", label: "Vitamin D (% DV)" },
-] as const;
-const API_DEFAULT_ZERO = new Set(["calories", "proteinG", "carbsG", "fatG"]);
-
 const ROW_INPUT =
   "h-8 flex-1 min-w-0 border-0 bg-transparent p-0 text-right shadow-none focus-visible:ring-0";
 const NUM_INPUT =
   "h-8 w-28 shrink-0 border-0 bg-transparent p-0 text-right shadow-none focus-visible:ring-0";
 
-/** Parse "1 cup" / "0.5 cup" / "1/2 cup" / "100g" into { value, unit }. */
-function parseServing(input: string): { value: number; unit: string } {
-  const s = input.trim();
-  const match = s.match(/^([\d.]+\/[\d.]+|[\d.]+)\s*(.*)$/);
-  if (!match) return { value: 1, unit: s || "serving" };
-  let value = 1;
-  if (match[1].includes("/")) {
-    const [a, b] = match[1].split("/").map(Number);
-    value = b ? a / b : 1;
-  } else {
-    value = Number(match[1]) || 1;
-  }
-  return { value: value > 0 ? value : 1, unit: match[2].trim() || "serving" };
-}
-
-/** Keep only digits and a single decimal point. */
-function decimalOnly(raw: string): string {
-  const cleaned = raw.replace(/[^0-9.]/g, "");
-  const parts = cleaned.split(".");
-  return parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : cleaned;
-}
-
 /** Downscale a label photo to ≤1280 px JPEG and return bare base64. */
-/** Fields the scanner can prefill (label-printed values as strings). */
-interface ScannedLabel {
-  brandName?: string | null;
-  foodName?: string | null;
-  servingSize?: string | null;
-  servingsPerContainer?: number | null;
-  barcode?: string | null;
-  [nutrient: string]: string | number | null | undefined;
-}
-
 function CreateFoodWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
