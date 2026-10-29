@@ -44,7 +44,10 @@ const MENU: Array<{ icon: LucideIcon; label: string; href: string }> = [
   { icon: PlusCircle, label: "Create a Food", href: "/foods/new" },
 ];
 
-/** Shown only to admins — it curates shared data rather than your own. */
+/**
+ * Shown only to admins, and first — it curates shared data rather than your
+ * own, so it does not belong among the personal settings below it.
+ */
 const ADMIN_MENU: Array<{ icon: LucideIcon; label: string; href: string }> = [
   { icon: ShieldCheck, label: "Admin", href: "/more/admin" },
 ];
@@ -139,7 +142,7 @@ export default function MorePage() {
         {/* Menu rows */}
         <Card className="gap-0 overflow-hidden p-0">
           <ul className="divide-y">
-            {[...MENU, ...(me?.isAdmin ? ADMIN_MENU : [])].map((item) => (
+            {[...(me?.isAdmin ? ADMIN_MENU : []), ...MENU].map((item) => (
               <li key={item.href + item.label}>
                 <Link
                   href={item.href}
