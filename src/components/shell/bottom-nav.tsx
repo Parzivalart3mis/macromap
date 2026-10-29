@@ -1,18 +1,19 @@
 "use client";
 
-import { Ellipsis, NotebookPen, Timer, TrendingUp, Utensils } from "lucide-react";
+import { Ellipsis, NotebookPen, TrendingUp, Utensils } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
+// Fasting is deliberately absent: it is a rarely-used feature and the tab bar
+// reads better at four. It keeps its route and its entry in the More menu.
 const TABS = [
   { href: "/diary", label: "Diary", icon: NotebookPen, match: ["/diary"] },
   // Food covers the create-food flow and the store pages that live under it.
   { href: "/food", label: "Food", icon: Utensils, match: ["/food", "/foods", "/stores"] },
   { href: "/progress", label: "Progress", icon: TrendingUp, match: ["/progress"] },
-  { href: "/fasting", label: "Fasting", icon: Timer, match: ["/fasting"] },
-  { href: "/more", label: "More", icon: Ellipsis, match: ["/more"] },
+  { href: "/more", label: "More", icon: Ellipsis, match: ["/more", "/fasting"] },
 ] as const;
 
 export function BottomNav() {
