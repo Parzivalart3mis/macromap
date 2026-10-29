@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Ruler, Scale } from "lucide-react";
+import { Minus, Plus, Ruler, Scale } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -28,8 +28,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { bodyComposition, navyBodyFatPct, waistToHeight } from "@/lib/body/composition";
 import { apiFetch } from "@/lib/client/fetcher";
-import { todayISO } from "@/lib/dates";
-import type { BiologicalSexDTO, ProgressOverviewDTO } from "@/types/api";
+import { haptic } from "@/lib/client/haptics";
+import { relativeDayLabel, todayISO } from "@/lib/dates";
+import {
+  WEIGHT_STEP,
+  previousReading,
+  stepWeight,
+  weightDelta,
+} from "@/lib/progress/weight-entry";
+import { cn } from "@/lib/utils";
+import type { BiologicalSexDTO, ProgressOverviewDTO, WeightLogDTO } from "@/types/api";
 
 /**
  * What the most recent measurement implies: waist-to-height with its band, and
@@ -96,18 +104,40 @@ function LogWeightDialog({
   onOpenChange,
   onLogged,
   unit,
+  weights,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLogged: () => void;
   unit: string;
+  /** Ascending by date — the last entry is the most recent weigh-in. */
+  weights: WeightLogDTO[];
 }) {
-  const [weight, setWeight] = useState("");
+  const today = todayISO();
+  const previous = weights.length ? weights[weights.length - 1] : null;
+  // Opens on the last reading rather than a blank field: the number moves by a
+  // tenth or two, so the common case becomes confirm-and-save. The parent keys
+  // this component on `open`, so these initialisers re-run each time it opens
+  // and a stale draft never carries over.
+  const [weight, setWeight] = useState(previous ? String(previous.weightValue) : "");
+  const [date, setDate] = useState(today);
   const [busy, setBusy] = useState(false);
 
+  const value = Number(weight);
+  const valid = Number.isFinite(value) && value > 0;
+  // What this entry would replace, which is the previous reading unless you
+  // have back-dated the entry past it.
+  const comparedTo = previousReading(weights, date);
+  const delta = valid ? weightDelta(value, comparedTo) : null;
+  const overwrites = weights.some((w) => w.date === date);
+
+  function nudge(by: number) {
+    haptic("light");
+    setWeight(String(stepWeight(valid ? value : (previous?.weightValue ?? 70), by)));
+  }
+
   async function save() {
-    const value = Number(weight);
-    if (!Number.isFinite(value) || value <= 0) {
+    if (!valid) {
       toast.error("Enter a valid weight");
       return;
     }
@@ -115,10 +145,14 @@ function LogWeightDialog({
     try {
       await apiFetch("/api/progress/weight", {
         method: "POST",
-        body: JSON.stringify({ date: todayISO(), weightValue: value }),
+        body: JSON.stringify({ date, weightValue: value }),
       });
-      toast.success("Weight logged");
-      setWeight("");
+      haptic("success");
+      toast.success(
+        delta != null && delta !== 0
+          ? `Logged ${value} ${unit} · ${delta > 0 ? "+" : ""}${delta} ${unit}`
+          : "Weight logged",
+      );
       onOpenChange(false);
       onLogged();
     } catch (error) {
@@ -133,21 +167,84 @@ function LogWeightDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Log weight</DialogTitle>
-          <DialogDescription>Recorded for today, one entry per day</DialogDescription>
+          <DialogDescription>One entry per day — logging again replaces it</DialogDescription>
         </DialogHeader>
+
         <div className="space-y-1">
           <Label htmlFor="weight-value">Weight ({unit})</Label>
-          <Input
-            id="weight-value"
-            type="number"
-            inputMode="decimal"
-            min={1}
-            step={0.1}
-            value={weight}
-            onChange={(event) => setWeight(event.target.value)}
-          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              aria-label={`Down ${WEIGHT_STEP} ${unit}`}
+              onClick={() => nudge(-WEIGHT_STEP)}
+            >
+              <Minus aria-hidden />
+            </Button>
+            <Input
+              id="weight-value"
+              type="number"
+              inputMode="decimal"
+              min={0.1}
+              step={WEIGHT_STEP}
+              value={weight}
+              onChange={(event) => setWeight(event.target.value)}
+              className="h-11 text-center text-lg font-bold tabular-nums"
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              aria-label={`Up ${WEIGHT_STEP} ${unit}`}
+              onClick={() => nudge(WEIGHT_STEP)}
+            >
+              <Plus aria-hidden />
+            </Button>
+          </div>
+          <p className="min-h-4 px-1 text-xs text-muted-foreground">
+            {comparedTo ? (
+              <>
+                Last {comparedTo.weightValue} {unit} ·{" "}
+                {relativeDayLabel(comparedTo.date, today)}
+                {delta != null && delta !== 0 ? (
+                  <span
+                    className={cn(
+                      "ml-1.5 font-semibold",
+                      delta < 0 ? "text-[var(--success,var(--primary))]" : "text-[var(--warning)]",
+                    )}
+                  >
+                    {delta > 0 ? "+" : ""}
+                    {delta} {unit}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              "Your first weigh-in starts the trend line"
+            )}
+          </p>
         </div>
-        <Button disabled={busy} onClick={save}>
+
+        <div className="space-y-1">
+          <Label htmlFor="weight-date">Date</Label>
+          <Input
+            id="weight-date"
+            type="date"
+            max={today}
+            value={date}
+            onChange={(event) => setDate(event.target.value || today)}
+            className="h-9 w-full appearance-none text-left"
+          />
+          <p className="min-h-4 px-1 text-xs text-muted-foreground">
+            {overwrites
+              ? `Replaces the reading already saved for ${relativeDayLabel(date, today)}`
+              : date === today
+                ? "Logging for today"
+                : `Filling in ${relativeDayLabel(date, today)}`}
+          </p>
+        </div>
+
+        <Button disabled={busy || !valid} onClick={save}>
           {busy ? (
             <>
               <Spinner data-icon="inline-start" />
@@ -542,10 +639,12 @@ export default function ProgressPage() {
       )}
 
       <LogWeightDialog
+        key={weightOpen ? "weigh-in-open" : "weigh-in-closed"}
         open={weightOpen}
         onOpenChange={setWeightOpen}
         onLogged={load}
         unit={overview?.weightUnit ?? "kg"}
+        weights={overview?.weights ?? []}
       />
       <LogMetricsDialog
         open={metricsOpen}

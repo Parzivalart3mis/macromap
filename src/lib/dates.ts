@@ -45,3 +45,26 @@ export function weekStartISO(date: string): string {
   const dow = (d.getDay() + 6) % 7;
   return addDaysISO(date, -dow);
 }
+
+/**
+ * "today" / "yesterday" / "3 days ago" / an absolute date past a week. Used
+ * where a logged entry needs context ("you last weighed in …") and a bare
+ * YYYY-MM-DD would make the reader do the arithmetic.
+ */
+export function relativeDayLabel(date: string, today: string): string {
+  if (date === today) return "today";
+  if (date === addDaysISO(today, -1)) return "yesterday";
+  if (date === addDaysISO(today, 1)) return "tomorrow";
+  const days = daysBetweenISO(date, today);
+  if (days > 1 && days <= 7) return `${days} days ago`;
+  if (days < -1 && days >= -7) return `in ${-days} days`;
+  return formatDisplayDate(date);
+}
+
+/** Whole days from `date` to `today` — positive when `date` is in the past. */
+export function daysBetweenISO(date: string, today: string): number {
+  const a = Date.parse(`${date}T00:00:00Z`);
+  const b = Date.parse(`${today}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.round((b - a) / 86_400_000);
+}
