@@ -7,6 +7,7 @@ import {
   FileText,
   LogOut,
   PlusCircle,
+  ShieldCheck,
   Store,
   Target,
   Timer,
@@ -23,9 +24,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/client/fetcher";
 import { todayISO } from "@/lib/dates";
+import { cn } from "@/lib/utils";
 import type { ProgressOverviewDTO, StreakDTO } from "@/types/api";
 
 interface MePayload {
+  isAdmin: boolean;
   user: { id: string; email: string | null; displayName: string | null };
   profile: { unitSystem: "metric" | "imperial" };
 }
@@ -39,6 +42,11 @@ const MENU: Array<{ icon: LucideIcon; label: string; href: string }> = [
   { icon: UtensilsCrossed, label: "My Meals, Recipes & Foods", href: "/more/foods" },
   { icon: Store, label: "Chain Stores", href: "/food" },
   { icon: PlusCircle, label: "Create a Food", href: "/foods/new" },
+];
+
+/** Shown only to admins — it curates shared data rather than your own. */
+const ADMIN_MENU: Array<{ icon: LucideIcon; label: string; href: string }> = [
+  { icon: ShieldCheck, label: "Admin", href: "/more/admin" },
 ];
 
 export default function MorePage() {
@@ -113,12 +121,25 @@ export default function MorePage() {
             </div>
           </div>
           <h2 className="mt-3 text-xl font-extrabold tracking-tight">{name}</h2>
+          {me ? (
+            <span
+              className={cn(
+                "mt-1.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                me.isAdmin
+                  ? "bg-primary/12 text-primary ring-1 ring-primary/20"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {me.isAdmin ? <ShieldCheck className="size-3" aria-hidden /> : null}
+              {me.isAdmin ? "Admin" : "Member"}
+            </span>
+          ) : null}
         </section>
 
         {/* Menu rows */}
         <Card className="gap-0 overflow-hidden p-0">
           <ul className="divide-y">
-            {MENU.map((item) => (
+            {[...MENU, ...(me?.isAdmin ? ADMIN_MENU : [])].map((item) => (
               <li key={item.href + item.label}>
                 <Link
                   href={item.href}
