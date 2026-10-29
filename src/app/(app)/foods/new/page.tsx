@@ -111,13 +111,13 @@ function CreateFoodWizard() {
   const [scanning, setScanning] = useState(false);
   const scanInputRef = useRef<HTMLInputElement>(null);
 
-  async function scanLabel(file: File) {
+  async function scanLabel(files: File[]) {
     setScanning(true);
     try {
-      const { data, mimeType } = await imageToBase64(file);
+      const images = await Promise.all(files.map(imageToBase64));
       const { label } = await apiFetch<{ label: ScannedLabel }>("/api/foods/label-scan", {
         method: "POST",
-        body: JSON.stringify({ image: data, mimeType }),
+        body: JSON.stringify({ images }),
       });
       if (label.brandName) setBrandName(label.brandName);
       if (label.foodName) setName(label.foodName);
@@ -129,7 +129,11 @@ function CreateFoodWizard() {
         if (typeof value === "number") scanned[field.key] = String(value);
       }
       setNumbers((prev) => ({ ...prev, ...scanned }));
-      toast.success("Label scanned — check the values before saving");
+      toast.success(
+        files.length > 1
+          ? `Read ${files.length} photos — check the values before saving`
+          : "Label scanned — check the values before saving",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not read that label");
     } finally {
@@ -262,11 +266,14 @@ function CreateFoodWizard() {
               ref={scanInputRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
+                // Front for the brand and name, back for the panel — one photo
+                // can never hold both, so several are read as one package.
+                const files = Array.from(e.target.files ?? []).slice(0, 5);
                 e.target.value = "";
-                if (file) scanLabel(file);
+                if (files.length) scanLabel(files);
               }}
             />
             <Button
@@ -276,7 +283,7 @@ function CreateFoodWizard() {
               onClick={() => scanInputRef.current?.click()}
             >
               <ScanText data-icon="inline-start" aria-hidden />
-              {scanning ? "Reading label..." : "Scan a nutrition label"}
+              {scanning ? "Reading photos..." : "Scan the package"}
             </Button>
           </div>
           <FieldRow label="Brand Name" hint="Optional">

@@ -35,14 +35,19 @@ const labelSchema = z.object({
 
 export type ScannedLabel = z.infer<typeof labelSchema>;
 
-const SYSTEM_PROMPT = `You read a photo of a packaged food's Nutrition Facts label and return its data as JSON.
+const SYSTEM_PROMPT = `You read photos of ONE packaged food and return its data as JSON.
+You may be given several photos of the same package — typically the front (brand
+and product name), the back or side (the Nutrition Facts panel), and sometimes a
+close-up of the barcode. Treat them as faces of a single product and combine what
+you read across all of them into one answer.
 Rules:
 - Report values exactly as printed for ONE serving (the label's serving size). Do not scale or estimate values that are not printed.
 - servingSize is the label's serving, e.g. "1 cup (240 ml)" or "28 g" — prefer "<number> <unit>" form.
 - "<1g" prints as 0.5. "Includes Xg Added Sugars" -> addedSugarsG.
 - Percentages (%DV) go in the *Pct fields as plain numbers (e.g. 10 for 10%).
-- brandName/foodName only if clearly visible on the packaging; otherwise null.
-- barcode only if the digits are fully legible; never guess.
+- brandName/foodName come from the front of the pack; take them from whichever photo shows them. Null if no photo shows them.
+- barcode only if the digits are fully legible in some photo; never guess.
+- A %DV column that disagrees with the printed amount beside it is a misprint: trust the amount.
 - Omit or null any value you cannot read confidently. Do not invent numbers.
 Respond with JSON only, using exactly these keys:
 {"brandName","foodName","servingSize","servingsPerContainer","barcode","calories","fatG","satFatG","polyUnsatFatG","monoUnsatFatG","transFatG","cholesterolMg","sodiumMg","potassiumMg","carbsG","fiberG","sugarG","addedSugarsG","sugarAlcoholsG","proteinG","vitaminAPct","vitaminCPct","calciumPct","ironPct","vitaminDPct"}`;
@@ -57,11 +62,26 @@ function getClient(): GoogleGenAI {
   return client;
 }
 
-/** Extract Nutrition Facts from a label photo (base64 image). */
+export interface LabelImage {
+  /** base64, no data-URL prefix. */
+  data: string;
+  mimeType: string;
+}
+
+/**
+ * Reads one packaged food from one or more photos of it.
+ *
+ * Several photos matter because a package cannot show everything at once: the
+ * brand and product name are on the front and the Nutrition Facts panel is on
+ * the back, so a single photo can only ever return one of the two. All images
+ * go into a single request, so this is one model call however many are passed.
+ */
 export async function scanNutritionLabel(
-  imageBase64: string,
-  mimeType: string,
+  images: LabelImage[],
 ): Promise<ScannedLabel> {
+  if (images.length === 0) {
+    throw new ApiError("invalid_request", "Add at least one photo", 400);
+  }
   const ai = getClient();
   const response = await ai.models.generateContent({
     model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
@@ -69,8 +89,15 @@ export async function scanNutritionLabel(
       {
         role: "user",
         parts: [
-          { inlineData: { mimeType, data: imageBase64 } },
-          { text: "Extract the nutrition label from this photo." },
+          ...images.map((image) => ({
+            inlineData: { mimeType: image.mimeType, data: image.data },
+          })),
+          {
+            text:
+              images.length === 1
+                ? "Extract this packaged food from the photo."
+                : `Extract this packaged food. The ${images.length} photos are different faces of the same package.`,
+          },
         ],
       },
     ],
@@ -95,7 +122,9 @@ export async function scanNutritionLabel(
   if (parsed.data.calories == null) {
     throw new ApiError(
       "ai_error",
-      "Could not read the calories — retake the photo with the full label visible",
+      images.length === 1
+        ? "Could not read the calories — add a photo of the Nutrition Facts panel"
+        : "Could not read the calories in any of those photos — make sure one shows the full Nutrition Facts panel",
       422,
     );
   }
