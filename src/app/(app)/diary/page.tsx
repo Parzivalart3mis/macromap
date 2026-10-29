@@ -26,7 +26,7 @@ import { haptic } from "@/lib/client/haptics";
 import { addDaysISO, formatDisplayDate, todayISO } from "@/lib/dates";
 import { defaultMealForNow } from "@/lib/store-theme";
 import { cn } from "@/lib/utils";
-import type { DiaryPayloadDTO, StreakDTO } from "@/types/api";
+import type { DayProgressDTO, DiaryPayloadDTO, StreakDTO } from "@/types/api";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // One-time celebration thresholds; the highest reached is kept in localStorage.
@@ -192,6 +192,7 @@ function DiaryHome() {
   const [error, setError] = useState<string | null>(null);
   const [streak, setStreak] = useState<StreakDTO | null>(null);
   const [recentDates, setRecentDates] = useState<string[]>([]);
+  const [recentDays, setRecentDays] = useState<DayProgressDTO[]>([]);
   const [newMealOpen, setNewMealOpen] = useState(false);
   const [copyDayOpen, setCopyDayOpen] = useState(false);
   const [newMealName, setNewMealName] = useState("");
@@ -223,12 +224,15 @@ function DiaryHome() {
   }, []);
 
   const loadStreak = useCallback(() => {
-    apiFetch<{ streak: StreakDTO; recentDates: string[] }>(
-      `/api/progress/streak?today=${todayISO()}`,
-    )
+    apiFetch<{
+      streak: StreakDTO;
+      recentDates: string[];
+      recentDays: DayProgressDTO[];
+    }>(`/api/progress/streak?today=${todayISO()}`)
       .then((data) => {
         setStreak(data.streak);
         setRecentDates(data.recentDates);
+        setRecentDays(data.recentDays ?? []);
         // Celebrate 7/30/100/365-day milestones once each, on the day reached.
         if (data.streak.todayLogged) {
           const reached = STREAK_MILESTONES.filter((m) => data.streak.current >= m).pop();
@@ -416,6 +420,7 @@ function DiaryHome() {
         </div>
         <WeekStrip
           loggedDates={recentDates}
+          progress={recentDays}
           selected={date}
           today={todayISO()}
           onSelect={goTo}

@@ -237,6 +237,14 @@ export interface FastingSessionDTO {
   durationMinutes: number | null;
 }
 
+/** A recent day's calorie outcome, for the diary week strip. */
+export interface DayProgressDTO {
+  date: string;
+  calories: number;
+  /** The goal that day resolved to, or null if no profile covered it. */
+  goal: number | null;
+}
+
 export interface WeightLogDTO {
   id: string;
   date: string;
