@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus, Ruler, Scale } from "lucide-react";
+import { Minus, Plus, Ruler, Scale, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { bodyComposition, navyBodyFatPct, waistToHeight } from "@/lib/body/composition";
 import { apiFetch } from "@/lib/client/fetcher";
 import { haptic } from "@/lib/client/haptics";
-import { relativeDayLabel, todayISO } from "@/lib/dates";
+import { formatDisplayDate, relativeDayLabel, todayISO } from "@/lib/dates";
 import {
   WEIGHT_STEP,
   previousReading,
@@ -96,6 +96,90 @@ function LatestComposition({ overview }: { overview: ProgressOverviewDTO }) {
         </div>
       ) : null}
     </dl>
+  );
+}
+
+/**
+ * The reading under inspection in the expanded weight chart, with the one
+ * action that was previously impossible: taking a bad figure back out. The
+ * trend line is a smoothed average, so a single mistyped weigh-in bends a
+ * fortnight of chart either side of it.
+ */
+function InspectedReading({
+  reading,
+  unit,
+  onDeleted,
+}: {
+  reading: WeightLogDTO | null;
+  unit: string;
+  onDeleted: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  // A different point was tapped — drop back out of the confirm step.
+  const key = reading?.date ?? "none";
+  const [armedFor, setArmedFor] = useState(key);
+  if (armedFor !== key) {
+    setArmedFor(key);
+    setConfirming(false);
+  }
+
+  if (!reading) {
+    return (
+      <p className="shrink-0 rounded-xl bg-muted/50 px-3 py-2.5 text-center text-xs text-muted-foreground">
+        Tap the chart to inspect a reading
+      </p>
+    );
+  }
+
+  async function remove() {
+    if (!reading) return;
+    setBusy(true);
+    try {
+      await apiFetch(`/api/progress/weight?date=${reading.date}`, { method: "DELETE" });
+      haptic("warning");
+      toast.success(`Removed the ${relativeDayLabel(reading.date, todayISO())} reading`);
+      onDeleted();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not remove it");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-3 rounded-xl bg-muted/50 px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold tabular-nums">
+          {reading.weightValue} {unit}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {formatDisplayDate(reading.date)} · {relativeDayLabel(reading.date, todayISO())}
+        </p>
+      </div>
+      {confirming ? (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
+          <Button size="sm" variant="destructive" disabled={busy} onClick={remove}>
+            {busy ? <Spinner data-icon="inline-start" /> : null}
+            Remove
+          </Button>
+        </div>
+      ) : (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="shrink-0 text-destructive"
+          onClick={() => setConfirming(true)}
+        >
+          <Trash2 data-icon="inline-start" aria-hidden />
+          Remove
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -459,6 +543,7 @@ export default function ProgressPage() {
   const [weightOpen, setWeightOpen] = useState(false);
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [weightChartOpen, setWeightChartOpen] = useState(false);
+  const [inspected, setInspected] = useState<string | null>(null);
   const [metricsChartOpen, setMetricsChartOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -658,11 +743,36 @@ export default function ProgressPage() {
         <>
           <ExpandedChartSheet
             open={weightChartOpen}
-            onOpenChange={setWeightChartOpen}
+            onOpenChange={(next) => {
+              setWeightChartOpen(next);
+              if (!next) setInspected(null);
+            }}
             title={`Weight (${overview.weightUnit})`}
-            subtitle="Bold line is your smoothed trend, faint dots are daily readings. Scroll sideways to reach every reading."
+            subtitle="Tap the chart to inspect a reading. Scroll sideways to reach every one."
           >
-            <WeightChart data={overview.weights} unit={overview.weightUnit} expanded />
+            <div className="flex h-full flex-col gap-2">
+              <div className="min-h-0 flex-1">
+                <WeightChart
+                  data={overview.weights}
+                  unit={overview.weightUnit}
+                  expanded
+                  onSelectDate={setInspected}
+                  selectedDate={inspected}
+                />
+              </div>
+              <InspectedReading
+                reading={
+                  inspected
+                    ? (overview.weights.find((w) => w.date === inspected) ?? null)
+                    : null
+                }
+                unit={overview.weightUnit}
+                onDeleted={() => {
+                  setInspected(null);
+                  load();
+                }}
+              />
+            </div>
           </ExpandedChartSheet>
 
           <ExpandedChartSheet

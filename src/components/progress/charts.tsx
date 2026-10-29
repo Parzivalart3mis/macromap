@@ -175,6 +175,7 @@ function withTrend(data: WeightLogDTO[], alpha = 0.25) {
   return data.map((row) => {
     ema = ema == null ? row.weightValue : alpha * row.weightValue + (1 - alpha) * ema;
     return {
+      date: row.date,
       label: dayLabel(row.date),
       weight: row.weightValue,
       trend: Math.round(ema * 10) / 10,
@@ -187,17 +188,38 @@ export function WeightChart({
   data,
   unit = "",
   expanded = false,
+  onSelectDate,
+  selectedDate,
 }: {
   data: WeightLogDTO[];
   unit?: string;
   expanded?: boolean;
+  /** Tapping anywhere on the plot reports the nearest reading's date. */
+  onSelectDate?: (date: string) => void;
+  /** Drawn larger, so the point under inspection is obvious. */
+  selectedDate?: string | null;
 }) {
   const rows = withTrend(data);
   const suffix = unit ? ` ${unit}` : "";
   const size = chartSize(expanded);
   return (
     <PlotArea expanded={expanded} points={rows.length} label="Weight trend">
-      <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+      <ComposedChart
+        data={rows}
+        margin={{ top: 8, right: 8, bottom: 0, left: -16 }}
+        onClick={
+          onSelectDate
+            ? (state) => {
+                // Recharts reports the category under the tap; map it back to
+                // the row so the caller gets an ISO date rather than "19 Oct".
+                const label = (state as { activeLabel?: string } | null)?.activeLabel;
+                const row = rows.find((r) => r.label === label);
+                if (row) onSelectDate(row.date);
+              }
+            : undefined
+        }
+        style={onSelectDate ? { cursor: "pointer" } : undefined}
+      >
           <defs>
             <linearGradient id="weightTrend" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.22} />
@@ -242,7 +264,20 @@ export function WeightChart({
             stroke="var(--muted-foreground)"
             strokeOpacity={0.55}
             strokeWidth={1.5}
-            dot={{ r: size.dotR, fill: "var(--muted-foreground)", strokeWidth: 0 }}
+            dot={(props) => {
+              const { cx, cy, index } = props as { cx: number; cy: number; index: number };
+              const isSelected = selectedDate != null && rows[index]?.date === selectedDate;
+              return (
+                <circle
+                  key={rows[index]?.date ?? index}
+                  cx={cx}
+                  cy={cy}
+                  r={isSelected ? size.activeDotR : size.dotR}
+                  fill={isSelected ? "var(--primary)" : "var(--muted-foreground)"}
+                  strokeWidth={0}
+                />
+              );
+            }}
             activeDot={{ r: size.activeDotR }}
           />
       </ComposedChart>
