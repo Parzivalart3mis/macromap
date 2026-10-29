@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { weightOnOrBefore } from "@/components/progress/charts";
+import { chartSize, plotMinWidth, weightOnOrBefore } from "@/components/progress/charts";
 import type { WeightLogDTO } from "@/types/api";
 
 const w = (date: string, weightValue: number): WeightLogDTO =>
@@ -31,5 +31,44 @@ describe("weightOnOrBefore", () => {
 
   it("returns null with no weigh-ins at all", () => {
     expect(weightOnOrBefore([], "2026-10-07")).toBeNull();
+  });
+});
+
+describe("chartSize", () => {
+  it("gives a card a fixed strip and an expanded chart the full height", () => {
+    expect(chartSize(false).heightClass).toBe("h-48");
+    expect(chartSize(true).heightClass).toBe("h-full");
+  });
+
+  it("grows the touch target when expanded", () => {
+    // The card's 4px active dot is not a fingertip; the expanded one is.
+    expect(chartSize(true).activeDotR).toBeGreaterThan(chartSize(false).activeDotR);
+    expect(chartSize(true).dotR).toBeGreaterThan(chartSize(false).dotR);
+  });
+
+  it("labels every reading only when expanded", () => {
+    expect(chartSize(false).tickInterval).toBe("preserveStartEnd");
+    expect(chartSize(true).tickInterval).toBe(0);
+  });
+});
+
+describe("plotMinWidth", () => {
+  it("never constrains a card chart, however many readings", () => {
+    expect(plotMinWidth(false, 90)).toBe(0);
+    expect(plotMinWidth(false, 1)).toBe(0);
+  });
+
+  it("reserves fingertip room per reading when expanded", () => {
+    // 90 daily weigh-ins across a ~360px phone is ~4px apart; this is the fix.
+    expect(plotMinWidth(true, 90)).toBeGreaterThan(360 * 10);
+    expect(plotMinWidth(true, 90) / 90).toBeGreaterThanOrEqual(44);
+  });
+
+  it("scales linearly with the number of readings", () => {
+    expect(plotMinWidth(true, 20)).toBe(plotMinWidth(true, 10) * 2);
+  });
+
+  it("asks for no minimum when there is nothing to plot", () => {
+    expect(plotMinWidth(true, 0)).toBe(0);
   });
 });

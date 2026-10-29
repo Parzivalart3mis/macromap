@@ -1,5 +1,6 @@
 "use client";
 
+import { Maximize2 } from "lucide-react";
 import { useState } from "react";
 import {
   Area,
@@ -13,6 +14,14 @@ import {
   YAxis,
 } from "recharts";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { bodyComposition, navyBodyFatPct } from "@/lib/body/composition";
 import { cn } from "@/lib/utils";
 import type {
@@ -23,6 +32,73 @@ import type {
 
 const AXIS_TICK = { fontSize: 11, fill: "var(--muted-foreground)" };
 const GRID = { stroke: "var(--border)", strokeOpacity: 0.5 };
+
+/**
+ * A trend chart renders at two sizes. In a card it is a glanceable 192px strip.
+ * Expanded it fills the sheet and, crucially, guarantees each reading at least
+ * `PX_PER_POINT` of horizontal room — three months of daily weigh-ins are only
+ * a few pixels apart in a phone-width card, which is what makes individual
+ * points impossible to hit. Past that width the chart scrolls sideways rather
+ * than compressing further.
+ */
+const PX_PER_POINT = 46;
+
+interface ChartSize {
+  /** Tailwind height class for the plot area. */
+  heightClass: string;
+  /** Radius of a plotted reading, and of the one under the finger. */
+  dotR: number;
+  activeDotR: number;
+  /** Expanded charts label every reading; cards label only the ends. */
+  tickInterval: "preserveStartEnd" | 0;
+}
+
+export function chartSize(expanded: boolean): ChartSize {
+  return expanded
+    ? { heightClass: "h-full", dotR: 4, activeDotR: 8, tickInterval: 0 }
+    : { heightClass: "h-48", dotR: 2.5, activeDotR: 4, tickInterval: "preserveStartEnd" };
+}
+
+/**
+ * Minimum plot width needed for `points` readings to stay individually
+ * reachable. Zero means "no minimum" — let ResponsiveContainer fill its parent,
+ * which is what a card-sized chart always wants.
+ */
+export function plotMinWidth(expanded: boolean, points: number): number {
+  if (!expanded || points <= 0) return 0;
+  return points * PX_PER_POINT;
+}
+
+/**
+ * Wraps the plot so an expanded chart can overflow horizontally. The inner
+ * width is only forced when the points would otherwise be closer together than
+ * a fingertip; otherwise it stays 100% and ResponsiveContainer behaves normally.
+ */
+function PlotArea({
+  expanded,
+  points,
+  label,
+  children,
+}: {
+  expanded: boolean;
+  points: number;
+  label: string;
+  children: React.ReactElement;
+}) {
+  const { heightClass } = chartSize(expanded);
+  const minWidth = plotMinWidth(expanded, points);
+  return (
+    <div
+      className={cn(heightClass, expanded && "overflow-x-auto overflow-y-hidden")}
+      role="img"
+      aria-label={label}
+    >
+      <div className="h-full" style={minWidth ? { minWidth } : undefined}>
+        <ResponsiveContainer>{children}</ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 function dayLabel(date: string): string {
   return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
@@ -107,13 +183,21 @@ function withTrend(data: WeightLogDTO[], alpha = 0.25) {
 }
 
 /** Weight: faint raw readings plus a bold trend line (the number that matters). */
-export function WeightChart({ data, unit = "" }: { data: WeightLogDTO[]; unit?: string }) {
+export function WeightChart({
+  data,
+  unit = "",
+  expanded = false,
+}: {
+  data: WeightLogDTO[];
+  unit?: string;
+  expanded?: boolean;
+}) {
   const rows = withTrend(data);
   const suffix = unit ? ` ${unit}` : "";
+  const size = chartSize(expanded);
   return (
-    <div className="h-48" role="img" aria-label="Weight trend">
-      <ResponsiveContainer>
-        <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+    <PlotArea expanded={expanded} points={rows.length} label="Weight trend">
+      <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
           <defs>
             <linearGradient id="weightTrend" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.22} />
@@ -126,7 +210,10 @@ export function WeightChart({ data, unit = "" }: { data: WeightLogDTO[]; unit?: 
             tick={AXIS_TICK}
             tickLine={false}
             axisLine={false}
-            interval="preserveStartEnd"
+            interval={size.tickInterval}
+            angle={expanded ? -35 : 0}
+            textAnchor={expanded ? "end" : "middle"}
+            height={expanded ? 52 : 30}
           />
           <YAxis
             tick={AXIS_TICK}
@@ -155,12 +242,11 @@ export function WeightChart({ data, unit = "" }: { data: WeightLogDTO[]; unit?: 
             stroke="var(--muted-foreground)"
             strokeOpacity={0.55}
             strokeWidth={1.5}
-            dot={{ r: 2.5, fill: "var(--muted-foreground)", strokeWidth: 0 }}
-            activeDot={{ r: 4 }}
+            dot={{ r: size.dotR, fill: "var(--muted-foreground)", strokeWidth: 0 }}
+            activeDot={{ r: size.activeDotR }}
           />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
+      </ComposedChart>
+    </PlotArea>
   );
 }
 
@@ -195,12 +281,14 @@ export function BodyMetricChart({
   heightCm,
   sex,
   weightUnit,
+  expanded = false,
 }: {
   metrics: BodyMetricLogDTO[];
   weights: WeightLogDTO[];
   heightCm: number | null;
   sex: ProgressOverviewDTO["sex"];
   weightUnit: string;
+  expanded?: boolean;
 }) {
   const rows = metrics.map((m) => {
     const bodyFat =
@@ -239,10 +327,12 @@ export function BodyMetricChart({
   const suffix = selected === "waist" ? " cm" : selected === "bodyFat" ? "%" : ` ${weightUnit}`;
   const seriesLabel = METRIC_SERIES.find((s) => s.key === selected)!.label;
 
+  const size = chartSize(expanded);
+
   return (
-    <div className="space-y-2">
+    <div className={cn("space-y-2", expanded && "flex h-full flex-col")}>
       {available.length > 1 ? (
-        <div className="flex gap-1" role="tablist" aria-label="Measurement">
+        <div className="flex shrink-0 gap-1" role="tablist" aria-label="Measurement">
           {available.map((s) => (
             <button
               key={s.key}
@@ -262,8 +352,12 @@ export function BodyMetricChart({
           ))}
         </div>
       ) : null}
-      <div className="h-48" role="img" aria-label={`${seriesLabel} trend`}>
-        <ResponsiveContainer>
+      <div className={cn(expanded && "min-h-0 flex-1")}>
+        <PlotArea
+          expanded={expanded}
+          points={rows.length}
+          label={`${seriesLabel} trend`}
+        >
           <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
             <defs>
               <linearGradient id="bodyMetricTrend" x1="0" y1="0" x2="0" y2="1">
@@ -277,7 +371,10 @@ export function BodyMetricChart({
               tick={AXIS_TICK}
               tickLine={false}
               axisLine={false}
-              interval="preserveStartEnd"
+              interval={size.tickInterval}
+              angle={expanded ? -35 : 0}
+              textAnchor={expanded ? "end" : "middle"}
+              height={expanded ? 52 : 30}
             />
             <YAxis
               tick={AXIS_TICK}
@@ -295,14 +392,60 @@ export function BodyMetricChart({
               stroke="var(--primary)"
               strokeWidth={2.5}
               fill="url(#bodyMetricTrend)"
-              dot={{ r: 2.5, fill: "var(--primary)", strokeWidth: 0 }}
-              activeDot={{ r: 4 }}
+              dot={{ r: size.dotR, fill: "var(--primary)", strokeWidth: 0 }}
+              activeDot={{ r: size.activeDotR }}
               connectNulls
             />
           </ComposedChart>
-        </ResponsiveContainer>
+        </PlotArea>
       </div>
     </div>
+  );
+}
+
+/**
+ * Full-screen wrapper for a trend chart. The card view is a glance; this is
+ * for reading individual points, so it hands the chart the whole viewport and
+ * lets it scroll sideways when the readings are dense.
+ */
+export function ExpandedChartSheet({
+  open,
+  onOpenChange,
+  title,
+  subtitle,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[92dvh] max-w-[calc(100%-1rem)] flex-col gap-3 p-4 sm:max-w-2xl">
+        <DialogHeader className="shrink-0 text-left">
+          <DialogTitle className="text-base">{title}</DialogTitle>
+          {subtitle ? <DialogDescription>{subtitle}</DialogDescription> : null}
+        </DialogHeader>
+        <div className="min-h-0 flex-1">{children}</div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The button that opens it — paired with the "Log" action in a card header. */
+export function ExpandChartButton({
+  onClick,
+  label,
+}: {
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <Button size="sm" variant="ghost" aria-label={label} onClick={onClick}>
+      <Maximize2 aria-hidden />
+    </Button>
   );
 }
 

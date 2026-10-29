@@ -9,6 +9,8 @@ import { MacroMeter } from "@/components/nutrition/macro-meter";
 import {
   BodyMetricChart,
   CalorieHistoryChart,
+  ExpandChartButton,
+  ExpandedChartSheet,
   LoggedDaysHeatmap,
   WeightChart,
 } from "@/components/progress/charts";
@@ -359,6 +361,8 @@ export default function ProgressPage() {
   const [error, setError] = useState<string | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
   const [metricsOpen, setMetricsOpen] = useState(false);
+  const [weightChartOpen, setWeightChartOpen] = useState(false);
+  const [metricsChartOpen, setMetricsChartOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -449,10 +453,18 @@ export default function ProgressPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-base">Weight ({overview.weightUnit})</CardTitle>
-              <Button size="sm" variant="secondary" onClick={() => setWeightOpen(true)}>
-                <Plus data-icon="inline-start" aria-hidden />
-                Log
-              </Button>
+              <div className="flex items-center gap-1">
+                {overview.weights.length > 0 ? (
+                  <ExpandChartButton
+                    label="Expand weight chart"
+                    onClick={() => setWeightChartOpen(true)}
+                  />
+                ) : null}
+                <Button size="sm" variant="secondary" onClick={() => setWeightOpen(true)}>
+                  <Plus data-icon="inline-start" aria-hidden />
+                  Log
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {overview.weights.length === 0 ? (
@@ -475,10 +487,18 @@ export default function ProgressPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-base">Body metrics</CardTitle>
-              <Button size="sm" variant="secondary" onClick={() => setMetricsOpen(true)}>
-                <Plus data-icon="inline-start" aria-hidden />
-                Log
-              </Button>
+              <div className="flex items-center gap-1">
+                {overview.bodyMetrics.length > 0 ? (
+                  <ExpandChartButton
+                    label="Expand body metrics chart"
+                    onClick={() => setMetricsChartOpen(true)}
+                  />
+                ) : null}
+                <Button size="sm" variant="secondary" onClick={() => setMetricsOpen(true)}>
+                  <Plus data-icon="inline-start" aria-hidden />
+                  Log
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {overview.bodyMetrics.length === 0 ? (
@@ -534,6 +554,35 @@ export default function ProgressPage() {
         heightCm={overview?.heightCm ?? null}
         sex={overview?.sex ?? null}
       />
+
+      {overview ? (
+        <>
+          <ExpandedChartSheet
+            open={weightChartOpen}
+            onOpenChange={setWeightChartOpen}
+            title={`Weight (${overview.weightUnit})`}
+            subtitle="Bold line is your smoothed trend, faint dots are daily readings. Scroll sideways to reach every reading."
+          >
+            <WeightChart data={overview.weights} unit={overview.weightUnit} expanded />
+          </ExpandedChartSheet>
+
+          <ExpandedChartSheet
+            open={metricsChartOpen}
+            onOpenChange={setMetricsChartOpen}
+            title="Body metrics"
+            subtitle="One measurement at a time — they sit on different scales. Scroll sideways to reach every reading."
+          >
+            <BodyMetricChart
+              metrics={overview.bodyMetrics}
+              weights={overview.weights}
+              heightCm={overview.heightCm}
+              sex={overview.sex}
+              weightUnit={overview.weightUnit}
+              expanded
+            />
+          </ExpandedChartSheet>
+        </>
+      ) : null}
     </main>
   );
 }
