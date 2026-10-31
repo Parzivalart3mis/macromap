@@ -68,3 +68,29 @@ export function daysBetweenISO(date: string, today: string): number {
   if (Number.isNaN(a) || Number.isNaN(b)) return 0;
   return Math.round((b - a) / 86_400_000);
 }
+
+/**
+ * The calendar date (YYYY-MM-DD) and hour (0–23) at `now` in an IANA zone, for
+ * server code that has to act on the user's own day. An unknown zone reads as UTC.
+ */
+export function zonedDateHour(timeZone: string, now: Date = new Date()): { date: string; hour: number } {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(now);
+  } catch {
+    return zonedDateHour("UTC", now);
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  return {
+    date: `${part("year")}-${part("month")}-${part("day")}`,
+    hour: Number(part("hour")),
+  };
+}

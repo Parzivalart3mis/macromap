@@ -1,3 +1,4 @@
+import { DailyRecap } from "@/components/diary/daily-recap";
 import { BottomNav } from "@/components/shell/bottom-nav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -6,6 +7,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Clears the fixed bottom nav, whose height grows with the bottom inset. */}
       <div className="flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))]">{children}</div>
       <BottomNav />
+      <DailyRecap />
     </div>
   );
 }

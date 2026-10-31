@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { addDaysISO, formatClock, weekStartISO } from "@/lib/dates";
+import { addDaysISO, formatClock, weekStartISO, zonedDateHour } from "@/lib/dates";
 import { defaultMealForNow, readableTextOn } from "@/lib/store-theme";
 
 describe("addDaysISO", () => {
@@ -33,6 +33,21 @@ describe("weekStartISO", () => {
     expect(weekStartISO("2026-06-29")).toBe("2026-06-29");
     // Sunday belongs to the week that started 6 days earlier.
     expect(weekStartISO("2026-07-05")).toBe("2026-06-29");
+  });
+});
+
+describe("zonedDateHour", () => {
+  it("reads the user's own day and hour", () => {
+    // 04:30 UTC on Nov 1 is still 11 PM on Oct 31 in Chicago (CDT, UTC-5).
+    const now = new Date("2026-11-01T04:30:00Z");
+    expect(zonedDateHour("America/Chicago", now)).toEqual({ date: "2026-10-31", hour: 23 });
+    expect(zonedDateHour("UTC", now)).toEqual({ date: "2026-11-01", hour: 4 });
+    expect(zonedDateHour("Asia/Kolkata", now)).toEqual({ date: "2026-11-01", hour: 10 });
+  });
+
+  it("falls back to UTC for an unknown zone", () => {
+    const now = new Date("2026-11-01T00:15:00Z");
+    expect(zonedDateHour("Not/AZone", now)).toEqual({ date: "2026-11-01", hour: 0 });
   });
 });
 

@@ -42,9 +42,9 @@ export function shortLabel(label: string): string {
   return label.replace(/\s*\([^)]*\)\s*$/, "").trim() || label;
 }
 
-function joinNames(names: string[]): string {
+function joinNames(names: string[], conjunction = "and"): string {
   if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `${names.slice(0, -1).join(", ")} ${conjunction} ${names[names.length - 1]}`;
 }
 
 function flatten(payload: DiaryPayload): Item[] {
@@ -318,9 +318,16 @@ export function buildDaySummary(
   const [topCal, nextCal] = top(grouped, "calories", 2);
 
   if (calDev > 0.05) {
+    const mealShare = `${pct(biggestMeal.totals.calories, totals.calories)}% of the day`;
+    // When one food is the whole meal, name it once rather than repeat the number.
+    const soleItem = topCal && Math.round(topCal.value) === Math.round(biggestMeal.totals.calories);
     issues.push({
       severity: calDev * 4,
-      text: `${fmt(calDelta)} cal over. ${biggestMeal.mealName} was ${fmt(biggestMeal.totals.calories)} cal (${pct(biggestMeal.totals.calories, totals.calories)}% of the day)${topCal ? `; ${topCal.label} alone was ${fmt(topCal.value)}` : ""}.`,
+      text: `${fmt(calDelta)} cal over. ${
+        soleItem
+          ? `${topCal.label} at ${biggestMeal.mealName.toLowerCase()} was ${fmt(topCal.value)} cal (${mealShare}).`
+          : `${biggestMeal.mealName} was ${fmt(biggestMeal.totals.calories)} cal (${mealShare})${topCal ? `; ${topCal.label} alone was ${fmt(topCal.value)}` : ""}.`
+      }`,
       next: topCal
         ? topCal.value / 2 >= calDelta
           ? `A half portion of ${topCal.label} would cover the ${fmt(calDelta)}-cal overage on its own.`
@@ -344,7 +351,7 @@ export function buildDaySummary(
           : ""
       }`,
       next: foods.length
-        ? `Close the protein gap with foods you already log: ${joinNames(foods.map((food) => describeFood(food, "protein")))}.`
+        ? `Close the protein gap with foods you already log: ${joinNames(foods.map((food) => describeFood(food, "protein")), "or")}.`
         : `Build each meal around 30–40 g protein; the ${fmt(proteinGap)} g gap is about one extra serving of a lean protein.`,
     });
   }
@@ -420,7 +427,7 @@ export function buildDaySummary(
       severity: fiberTarget ? (1 - fiber / fiberTarget) * 1 : 0.4,
       text: fiberTarget ? `Fiber ${fmt(fiber)} of ${fmt(fiberTarget)} g.` : `Fiber was only ${fmt(fiber)} g.`,
       next: foods.length
-        ? `Add fiber with foods you already eat: ${joinNames(foods.map((food) => describeFood(food, "fiber")))}.`
+        ? `Add fiber with foods you already eat: ${joinNames(foods.map((food) => describeFood(food, "fiber")), "or")}.`
         : "Add a fruit, a cup of beans or a bowl of oats; any one of them adds 5–10 g fiber.",
     });
   }

@@ -21,13 +21,12 @@ function Stat({ stat }: { stat: DaySummary["stats"][number] }) {
       <p className="text-sm font-semibold tabular-nums">
         {stat.actual.toLocaleString("en-US")}
         {unit}
-        {stat.target != null ? (
-          <span className="font-normal text-muted-foreground">
-            {" "}
-            / {stat.target.toLocaleString("en-US")}
-          </span>
-        ) : null}
       </p>
+      {stat.target != null ? (
+        <p className="text-xs text-muted-foreground tabular-nums">
+          of {stat.target.toLocaleString("en-US")}
+        </p>
+      ) : null}
       {pct != null ? (
         <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
           <div

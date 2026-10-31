@@ -110,7 +110,7 @@ describe("buildDaySummary", () => {
       ]),
     );
     expect(summary.headline).toContain("650 cal over target, mostly at dinner");
-    expect(summary.improve[0]).toContain("Dinner was 1,400 cal (53% of the day); Deep Dish Pizza alone was 1,400");
+    expect(summary.improve[0]).toBe("650 cal over. Deep Dish Pizza at dinner was 1,400 cal (53% of the day).");
     expect(summary.tomorrow[0]).toContain("A half portion of Deep Dish Pizza");
   });
 

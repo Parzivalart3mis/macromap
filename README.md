@@ -55,9 +55,19 @@ pnpm dev
 ```
 
 Optional integrations degrade gracefully: without Upstash rate limits are
-skipped; without `GEMINI_API_KEY` day-analysis falls back to rule-based
-insights and natural-language logging returns 503; without `BARCODE_API_KEY`
+skipped; without `GEMINI_API_KEY` the day summary uses its rule-based wording
+(same numbers, plainer sentences) and natural-language logging returns 503; without `BARCODE_API_KEY`
 (a free USDA FoodData Central key) the barcode pipeline stops after Open Food Facts.
+
+### End-of-day summary
+
+Schedule `GET /api/cron/daily-summary` **hourly** (cron-job.org, with
+`Authorization: Bearer $CRON_SECRET`). In each user's 11 PM hour it writes that
+day's summary and marks the day complete; every run also re-checks yesterday,
+so food logged after 11 PM is folded in. Unchanged days cost nothing. The app
+shows the last logged day's summary once, on the first open of each day, and
+generates it then if the cron hasn't. Timezones come from the device on that
+first open.
 
 ### Clerk webhook
 
