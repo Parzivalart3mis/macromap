@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { ErrorState } from "@/components/async-states";
 import { CalendarPopover } from "@/components/diary/calendar-popover";
 import { DiaryDayContent } from "@/components/diary/day-content";
+import { DaySummaryView } from "@/components/diary/day-summary";
 import { QuickLogFab } from "@/components/diary/quick-log-fab";
 import { StreakPopover } from "@/components/diary/streak-popover";
 import { WeekStrip } from "@/components/diary/week-strip";
@@ -27,6 +28,7 @@ import { addDaysISO, formatDisplayDate, todayISO } from "@/lib/dates";
 import { defaultMealForNow } from "@/lib/store-theme";
 import { cn } from "@/lib/utils";
 import type { DayProgressDTO, DiaryPayloadDTO, StreakDTO } from "@/types/api";
+import type { DaySummary } from "@/types/summary";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // One-time celebration thresholds; the highest reached is kept in localStorage.
@@ -196,7 +198,7 @@ function DiaryHome() {
   const [newMealOpen, setNewMealOpen] = useState(false);
   const [copyDayOpen, setCopyDayOpen] = useState(false);
   const [newMealName, setNewMealName] = useState("");
-  const [insights, setInsights] = useState<string[] | null>(null);
+  const [summary, setSummary] = useState<DaySummary | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
@@ -313,11 +315,11 @@ function DiaryHome() {
   async function analyze() {
     setAnalyzing(true);
     try {
-      const data = await apiFetch<{ insights: string[] }>("/api/diary/analyze", {
+      const data = await apiFetch<{ summary: DaySummary }>("/api/diary/analyze", {
         method: "POST",
         body: JSON.stringify({ date }),
       });
-      setInsights(data.insights);
+      setSummary(data.summary);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Analysis failed");
     } finally {
@@ -325,24 +327,24 @@ function DiaryHome() {
     }
   }
 
-  // "Complete diary": mark the day done, generate + save its analysis, and show
+  // "Complete diary": mark the day done, generate + save its summary, and show
   // it. Idempotent — also used for "Re-analyze".
   async function completeDay() {
     setAnalyzing(true);
     try {
-      const data = await apiFetch<{ insights: string[] }>("/api/diary/complete", {
+      const data = await apiFetch<{ summary: DaySummary | null }>("/api/diary/complete", {
         method: "POST",
         body: JSON.stringify({ date }),
       });
-      setInsights(data.insights);
+      setSummary(data.summary);
       haptic("success");
       fetchDay(dateRef.current, true);
     } catch (err) {
-      setInsights(null);
+      setSummary(null);
       toast.error(err instanceof Error ? err.message : "Could not complete the day");
     } finally {
       // Always clear the loading state so the dialog flips from "Analyzing…" to
-      // the insights (or closes on error).
+      // the summary (or closes on error).
       setAnalyzing(false);
     }
   }
@@ -486,7 +488,7 @@ function DiaryHome() {
                 onComplete={completeDay}
                 onUncomplete={uncompleteDay}
                 onViewAnalysis={() => {
-                  if (activePayload?.analysis) setInsights(activePayload.analysis);
+                  if (activePayload?.analysis) setSummary(activePayload.analysis);
                 }}
               />
             </motion.div>
@@ -529,32 +531,23 @@ function DiaryHome() {
       </Dialog>
 
       <Dialog
-        open={insights !== null || analyzing}
+        open={summary !== null || analyzing}
         onOpenChange={(open) => {
           if (!open) {
-            setInsights(null);
+            setSummary(null);
             setAnalyzing(false);
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Day analysis</DialogTitle>
+            <DialogTitle>Day summary</DialogTitle>
             <DialogDescription>{formatDisplayDate(date)}</DialogDescription>
           </DialogHeader>
-          {analyzing ? (
+          {analyzing || !summary ? (
             <p className="py-4 text-sm text-muted-foreground">Analyzing your day...</p>
           ) : (
-            <ul className="space-y-2 py-2">
-              {insights?.map((insight, index) => (
-                <li key={index} className="flex gap-2 text-sm">
-                  <span className="text-primary" aria-hidden>
-                    •
-                  </span>
-                  {insight}
-                </li>
-              ))}
-            </ul>
+            <DaySummaryView summary={summary} />
           )}
         </DialogContent>
       </Dialog>

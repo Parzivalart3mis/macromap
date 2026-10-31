@@ -19,6 +19,7 @@ import type {
   NutritionSnapshot,
   SavedMealEntrySnapshot,
 } from "@/types/nutrition";
+import type { DaySummary } from "@/types/summary";
 
 export const unitSystemEnum = pgEnum("unit_system", ["metric", "imperial"]);
 
@@ -467,9 +468,11 @@ export const diaryDays = pgTable(
      * current phase.
      */
     goalPhase: goalPhaseEnum("goal_phase"),
-    // Set when the user "completes" the day; the saved AI report for that day.
+    // Set when the day is completed (by the user, or the end-of-day summary);
+    // the saved summary for that day.
     completedAt: timestamp("completed_at", { withTimezone: true }),
-    analysisJson: jsonb("analysis_json").$type<string[]>(),
+    // Pre-v2 rows hold a bare string list; readSummary() treats those as none.
+    analysisJson: jsonb("analysis_json").$type<DaySummary | string[]>(),
   },
   (t) => [uniqueIndex("diary_days_user_date_idx").on(t.userId, t.date)],
 );

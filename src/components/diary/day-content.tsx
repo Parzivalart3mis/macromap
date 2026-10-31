@@ -167,11 +167,11 @@ export function DiaryDayContent({
   onGoalChanged: () => void;
   /** Refetch this day after entries change in place (e.g. repeat last meal). */
   onChanged: () => void;
-  /** Mark the day complete (and run/save the AI analysis). */
+  /** Mark the day complete (and run/save its summary). */
   onComplete: () => void;
   /** Mark a completed day incomplete again. */
   onUncomplete: () => void;
-  /** Show the saved analysis for a completed day. */
+  /** Show the saved summary for a completed day. */
   onViewAnalysis: () => void;
 }) {
   const [nutritionOpen, setNutritionOpen] = useState(false);
@@ -416,7 +416,8 @@ export function DiaryDayContent({
         Add meal bucket
       </Button>
 
-      {/* Complete the day — logs stay editable; saves an AI analysis */}
+      {/* Complete the day — logs stay editable; saves the day summary. The
+          end-of-day job does this on its own at 11 PM. */}
       {payload.completedAt ? (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-primary">
@@ -427,10 +428,10 @@ export function DiaryDayContent({
             You can still log — it stays complete. Re-analyze to refresh the report.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {payload.analysis?.length ? (
+            {payload.analysis ? (
               <Button size="sm" variant="secondary" onClick={onViewAnalysis}>
                 <Sparkles data-icon="inline-start" aria-hidden />
-                View analysis
+                View summary
               </Button>
             ) : null}
             <Button size="sm" variant="ghost" onClick={onComplete}>

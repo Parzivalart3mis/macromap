@@ -1,4 +1,5 @@
 import type { AlternateServing, NutritionSnapshot } from "./nutrition";
+import type { DaySummary } from "./summary";
 
 /** Client-side DTOs — server rows after JSON serialization (dates as strings). */
 
@@ -118,8 +119,8 @@ export interface DiaryPayloadDTO {
   dayOneOffs: DayOneOffDTO[] | null;
   /** ISO time the day was marked complete, else null. */
   completedAt: string | null;
-  /** Saved AI analysis for the day, else null. */
-  analysis: string[] | null;
+  /** Saved end-of-day summary, else null. */
+  analysis: DaySummary | null;
 }
 
 export interface StoreThemeDTO {

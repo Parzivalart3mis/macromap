@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { handleApiError, parseBody, requireDbUser } from "@/lib/api";
-import { analyzeDiaryDay } from "@/lib/ai/daily-insights";
-import { getDiaryPayload } from "@/lib/diary/service";
+import { previewDaySummary } from "@/lib/diary/summary-service";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 const analyzeSchema = z.object({
@@ -15,9 +14,8 @@ export async function POST(request: Request) {
     const userId = await requireDbUser();
     await enforceRateLimit("aiParse", userId);
     const { date } = await parseBody(request, analyzeSchema);
-    const payload = await getDiaryPayload(userId, date);
-    const insights = await analyzeDiaryDay(payload);
-    return NextResponse.json({ insights });
+    const summary = await previewDaySummary(userId, date);
+    return NextResponse.json({ summary });
   } catch (error) {
     return handleApiError(error);
   }

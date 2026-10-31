@@ -21,9 +21,11 @@ import {
   type GoalDay,
   type GoalPhase,
 } from "@/lib/db/schema";
+import { readSummary } from "@/lib/diary/day-summary";
 import { foodToNutrition, roundNutrition, scaleNutrition, sumNutrition } from "@/lib/nutrition";
 import { scaleServingText } from "@/lib/units";
 import type { NutritionSnapshot } from "@/types/nutrition";
+import type { DaySummary } from "@/types/summary";
 
 export const DEFAULT_MEALS = ["Breakfast", "Lunch", "Dinner", "Snacks"] as const;
 
@@ -279,8 +281,8 @@ export interface DiaryPayload {
   dayOneOffs: DayOneOff[] | null;
   /** ISO time the day was marked complete, else null. */
   completedAt: string | null;
-  /** Saved AI analysis for the day, else null. */
-  analysis: string[] | null;
+  /** Saved end-of-day summary, else null. */
+  analysis: DaySummary | null;
 }
 
 /** Calorie contribution of a macro delta (activities store no calorie field). */
@@ -671,6 +673,6 @@ export async function getDiaryPayload(
     dayActivities,
     dayOneOffs,
     completedAt: day?.completedAt ? day.completedAt.toISOString() : null,
-    analysis: day?.analysisJson ?? null,
+    analysis: readSummary(day?.analysisJson),
   };
 }
