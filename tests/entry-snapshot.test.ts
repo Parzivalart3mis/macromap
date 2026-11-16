@@ -36,10 +36,8 @@ describe("rescaleEntrySnapshot", () => {
     expect(rescaleEntrySnapshot(slices, 1.5).serving).toBe("3 cookies");
   });
 
-  it("does not re-pluralize when scaling down to one (pre-existing cosmetic)", () => {
-    // scaleServingText only rewrites the leading number, so the unit word is
-    // left verbatim. Documented here so a future plural fix is a deliberate change.
-    expect(rescaleEntrySnapshot(slices, 0.5).serving).toBe("1 cookies");
+  it("makes the unit agree when scaling down to one", () => {
+    expect(rescaleEntrySnapshot(slices, 0.5).serving).toBe("1 cookie");
   });
 
   it("uses an explicit serving text verbatim when the unit changes", () => {
@@ -50,9 +48,11 @@ describe("rescaleEntrySnapshot", () => {
   });
 
   it("would mislabel without the explicit text (the bug this guards)", () => {
+    // Scaling alone now keeps the weight honest, but it still describes the
+    // amount in cups — not the unit the user actually switched to.
     const scaled = rescaleEntrySnapshot(curdCup, 100 / 245);
     expect(scaled.serving).not.toBe("100 g");
-    expect(scaled.serving).toBe("0.41 cup");
+    expect(scaled.serving).toBe("0.41 cups (100 g)");
   });
 
   it("keeps label and brand untouched", () => {

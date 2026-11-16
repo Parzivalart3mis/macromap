@@ -68,50 +68,177 @@ export function formatNum(n: number): string {
   return String(Math.round(n * 100) / 100);
 }
 
-/** How the food's native serving reads: its override label, or "<value> <unit>". */
+/**
+ * How the food's native serving reads: its override label, or "<value> <unit>"
+ * with the unit agreeing with the amount ("3 pieces", not "3 piece").
+ */
 export function nativeServingLabel(
   food: Pick<FoodDTO, "servingSizeValue" | "servingSizeUnit" | "servingSizeLabel">,
 ): string {
-  return food.servingSizeLabel ?? `${formatNum(food.servingSizeValue)} ${food.servingSizeUnit}`;
+  return (
+    food.servingSizeLabel ??
+    `${formatNum(food.servingSizeValue)} ${inflectUnitPhrase(food.servingSizeUnit, food.servingSizeValue)}`
+  );
+}
+
+/** Abbreviated measures and size adjectives — words that never take a plural. */
+const UNINFLECTED = new Set([
+  "g", "kg", "mg", "oz", "lb", "ml", "l", "tbsp", "tsp", "fl", "floz",
+  "small", "medium", "large", "mini", "regular", "jumbo", "whole", "half",
+]);
+/** Measure nouns that lead a phrase and carry its plural ("cups, sliced", "cups cooked"). */
+const LEADING_NOUNS = new Set([
+  "cup", "slice", "piece", "serving", "scoop", "bowl", "can", "bottle", "packet", "stick",
+]);
+/** "-ies" plurals whose singular ends in "y"; every other "-ies" just drops the "s" (cookies). */
+const Y_NOUNS = new Set(["berry", "patty", "candy", "fry", "cherry", "pastry", "jelly", "gummy"]);
+
+function singularize(word: string): string {
+  const lower = word.toLowerCase();
+  if (/(ss|us|is)$/.test(lower) || !lower.endsWith("s")) return word;
+  if (/(ch|sh|x|z|ss)es$/.test(lower)) return word.slice(0, -2);
+  if (lower.endsWith("ies") && Y_NOUNS.has(`${lower.slice(0, -3)}y`)) return `${word.slice(0, -3)}y`;
+  return word.slice(0, -1);
+}
+
+function pluralize(word: string): string {
+  const lower = word.toLowerCase();
+  if (lower.endsWith("s") && !/(ss|us|is)$/.test(lower)) return word; // already plural
+  if (/(s|x|z|ch|sh)$/.test(lower)) return `${word}es`;
+  if (/[^aeiou]y$/.test(lower) && Y_NOUNS.has(lower)) return `${word.slice(0, -1)}ies`;
+  return `${word}s`;
 }
 
 /**
- * Rescale a stored serving text's amount ("2 slices" ×2 → "4 slices").
- * A trailing parenthetical is a description of the *original* size
- * ("1 medium (118 g)") and would go stale, so it is dropped when scaling.
- * Texts with no leading number pass through unchanged.
+ * Make a unit phrase agree with its amount: "slice" ↔ "slices", "cup, sliced" ↔
+ * "cups, sliced", "family pack" ↔ "family packs". Abbreviations ("g", "tbsp",
+ * "fl oz") and size adjectives ("medium", "extra small") are left alone.
+ */
+export function inflectUnitPhrase(phrase: string, amount: number): string {
+  // Qualifiers after a comma or dot ("cup, sliced", "regular · serves 2") never inflect.
+  const cut = phrase.search(/[,·]/);
+  const head = cut === -1 ? phrase : phrase.slice(0, cut);
+  const rest = cut === -1 ? "" : phrase.slice(cut);
+  const words = head.split(" ");
+  const filled = words.map((w, i) => (w ? i : -1)).filter((i) => i >= 0);
+  if (filled.length === 0) return phrase;
+  const first = filled[0];
+  const last = filled[filled.length - 1];
+  const target = LEADING_NOUNS.has(singularize(words[first]).toLowerCase()) ? first : last;
+  const word = words[target];
+  if (!/^[A-Za-z]+$/.test(word) || UNINFLECTED.has(word.toLowerCase())) return phrase;
+  words[target] = amount === 1 ? singularize(word) : pluralize(word);
+  return words.join(" ") + rest;
+}
+
+const VULGAR: Record<string, number> = {
+  "½": 0.5, "⅓": 1 / 3, "⅔": 2 / 3, "¼": 0.25, "¾": 0.75, "⅛": 0.125,
+};
+// A leading amount: "2", "1.5", "3/4", "½" — optionally approximate ("~165").
+const AMOUNT = String.raw`(~?)(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?|[½⅓⅔¼¾⅛])`;
+const AMOUNT_PHRASE = new RegExp(String.raw`^${AMOUNT}(\s*)(.*)$`, "u");
+
+function parseAmount(raw: string): number {
+  if (raw in VULGAR) return VULGAR[raw];
+  if (raw.includes("/")) {
+    const [a, b] = raw.split("/").map((part) => Number(part.trim()));
+    return b ? a / b : Number.NaN;
+  }
+  return Number(raw);
+}
+
+/** Scale one "<amount> <unit phrase>" segment, or null when it is not one. */
+function scaleSegment(segment: string, ratio: number): string | null {
+  const match = segment.match(AMOUNT_PHRASE);
+  if (!match) return null;
+  const [, approx, rawAmount, gap, phrase] = match;
+  // "1 1/2 cups" — a mixed number this parser does not model; leave it be.
+  if (/^\d/.test(phrase)) return null;
+  const amount = parseAmount(rawAmount);
+  if (!Number.isFinite(amount)) return null;
+  const scaled = Math.round(amount * ratio * 100) / 100;
+  return `${approx}${formatNum(scaled)}${gap}${inflectUnitPhrase(phrase, scaled)}`;
+}
+
+/**
+ * Rescale a serving text by `ratio`, keeping it a description of the whole
+ * amount: "1 medium (118 g)" ×2 → "2 medium (236 g)", "2 slices (41 g)" ×0.5 →
+ * "1 slice (20.5 g)", "1 pack (4 cups, 601 g)" ×2 → "2 packs (8 cups, 1202 g)".
+ *
+ * Every amount in the text scales together, so the parenthetical stays true
+ * instead of going stale — collapsing it to the bare weight ("236 g") is what
+ * used to make a logged banana read differently from the one you picked. A
+ * parenthetical with no amount in it ("label serving", "¼ recipe") cannot be
+ * scaled and is dropped. Texts with no leading amount pass through unchanged.
  */
 export function scaleServingText(
   text: string | undefined,
   ratio: number,
 ): string | undefined {
   if (text === undefined || ratio === 1) return text;
-  const match = text.match(/^\s*([\d.]+)(.*)$/);
-  if (!match || !Number.isFinite(Number(match[1]))) return text;
-  const rest = match[2].replace(/\s*\([^)]*\)\s*$/, "");
-  return `${Math.round(Number(match[1]) * ratio * 100) / 100}${rest}`;
+
+  // "2 × 16.9 fl oz", "2 × whole pizza": only the multiplier scales.
+  const times = text.match(/^\s*(\d+(?:\.\d+)?)\s*×\s*(.+)$/u);
+  if (times) {
+    const n = Math.round(Number(times[1]) * ratio * 100) / 100;
+    return n === 1 ? times[2] : `${formatNum(n)} × ${times[2]}`;
+  }
+
+  // lead "(parenthetical)" tail — e.g. `3/4 cup` `(56 g)` ` dry`.
+  const open = text.indexOf("(");
+  const close = open === -1 ? -1 : text.indexOf(")", open);
+  const lead = (open === -1 ? text : text.slice(0, open)).trim();
+  const inner = open !== -1 && close !== -1 ? text.slice(open + 1, close) : null;
+  const tail = open !== -1 && close !== -1 ? text.slice(close + 1) : "";
+
+  const scaledLead = scaleSegment(lead, ratio);
+  if (scaledLead === null) return text;
+
+  let paren = "";
+  if (inner !== null) {
+    const parts = inner.split(",").map((part) => scaleSegment(part.trim(), ratio));
+    if (parts.every((part): part is string => part !== null)) paren = ` (${parts.join(", ")})`;
+  }
+  return `${scaledLead}${paren}${tail}`;
+}
+
+/**
+ * Serving text for `servings` of a serving described by `label`. At exactly one
+ * the label is used verbatim; otherwise it is scaled, and a label with no
+ * amount of its own ("whole pizza", "large (6 oz)") is counted: "2 × whole pizza".
+ */
+export function servingTextFor(label: string, servings: number): string {
+  if (servings === 1) return label;
+  const scaled = scaleServingText(label, servings);
+  return scaled !== undefined && scaled !== label
+    ? scaled
+    : `${formatNum(servings)} × ${label}`;
 }
 
 /**
  * Serving text for N native servings of a food — the label at exactly 1
- * serving ("1 medium (118 g)", "2 slices"), a pluralized amount otherwise
- * ("4 cookies", "236 g").
+ * serving ("1 medium (118 g)", "2 slices"), the label scaled otherwise
+ * ("2 medium (236 g)", "4 slices", "64 g (2 scoops)").
  */
 export function nativeServingTextFor(
   food: Pick<FoodDTO, "servingSizeValue" | "servingSizeUnit" | "servingSizeLabel">,
   servings: number,
 ): string {
-  if (servings === 1) return nativeServingLabel(food);
-  const amount = servings * food.servingSizeValue;
-  return `${formatNum(amount)} ${pluralizeUnit(food.servingSizeUnit, amount)}`;
+  return servingTextFor(nativeServingLabel(food), servings);
 }
 
-/** Recognises the food's serving unit; the first known token wins ("g (1 scoop)" → g). */
+/**
+ * Recognises the food's serving unit from its leading word: "g (1 scoop)" is
+ * grams, "fl oz" is volume, "slices" is a count. A measure that only appears
+ * later is a description, not the unit — "bowl (~325g)" is one bowl, and reading
+ * it as one gram would make the "100 g" option a hundred bowls.
+ */
 function classifyUnit(rawUnit: string): { kind: UnitKind; canonical: string; factor: number } {
-  const tokens = rawUnit.toLowerCase().match(/[a-z]+/g) ?? [];
-  for (const token of tokens) {
-    const singular = token.endsWith("s") ? token.slice(0, -1) : token;
-    for (const key of [token, singular]) {
+  const tokens = rawUnit.toLowerCase().replace(/\(.*$/, "").match(/[a-z]+/g) ?? [];
+  const candidates = [tokens.slice(0, 2).join(" "), tokens[0] ?? ""];
+  for (const candidate of candidates) {
+    const singular = candidate.endsWith("s") ? candidate.slice(0, -1) : candidate;
+    for (const key of [candidate, singular]) {
       if (key in VOLUME) return { kind: "volume", canonical: key, factor: VOLUME[key] };
       if (key in WEIGHT) return { kind: "weight", canonical: key, factor: WEIGHT[key] };
     }
@@ -143,9 +270,11 @@ export function unitKindOf(food: FoodDTO): UnitKind {
   return classifyUnit(food.servingSizeUnit).kind;
 }
 
-// Extra choices offered per kind, as "1 <unit>".
-const VOLUME_CHOICES = ["cup", "ml", "tbsp", "tsp", "fl oz", "l"] as const;
-const WEIGHT_CHOICES = ["g", "oz", "lb", "kg"] as const;
+// Extra choices offered per kind, as "1 <unit>". Pounds, kilograms and litres
+// are deliberately absent: nobody logs a pound of yogurt, and across the whole
+// diary those three options were never once chosen — they only lengthened the list.
+const VOLUME_CHOICES = ["cup", "ml", "tbsp", "tsp", "fl oz"] as const;
+const WEIGHT_CHOICES = ["g", "oz"] as const;
 
 /**
  * Selectable serving units for a food. Count-based foods (serving, item,
@@ -178,9 +307,14 @@ export function servingOptions(food: FoodDTO): UnitOption[] {
     if (seen.has(dedupKey) || baseAmount <= 0) continue;
     seen.add(dedupKey);
     const equiv = alt.multiplier * food.servingSizeValue;
+    // A container-like alternate explains itself in base units ("1 container
+    // (4 servings)"). A plain measure does not need to: "1 g" of almonds is
+    // clearer than "1 g (0.83 almonds)".
     const label =
       alt.label ??
-      `1 ${alt.unit} (${formatNum(equiv)} ${pluralizeUnit(food.servingSizeUnit, equiv)})`;
+      (classifyUnit(alt.unit).kind === "count"
+        ? `1 ${alt.unit} (${formatNum(equiv)} ${pluralizeUnit(food.servingSizeUnit, equiv)})`
+        : `1 ${alt.unit}`);
     options.push({ label, value: 1, unit: alt.unit, baseAmount });
   }
 
@@ -236,16 +370,13 @@ export function computeServing(
   const quantity = servings;
   const factor = quantity * servingMultiplier;
   const nutrition = roundNutrition(scaleNutrition(dtoNutrition(food), factor));
-  // At exactly 1 serving the option's label is the truest description
-  // ("1 medium (118 g)", "16.9 fl oz", "1 serving (6 cookies)"); otherwise
-  // write the scaled amount with a pluralized count unit ("4 cookies"). Units
-  // that begin with their own number ("16.9 fl oz") read as "2 × 16.9 fl oz".
-  const amount = servings * option.value;
+  // The option's label is the truest description of what was picked, so the
+  // text is that label scaled — "1 medium (118 g)" twice is "2 medium (236 g)",
+  // never the bare "236 g" it used to collapse to. Units that begin with their
+  // own number ("16.9 fl oz") are counted instead: "2 × 16.9 fl oz".
   const servingText =
-    servings === 1
-      ? option.label
-      : /^\d/.test(option.unit)
-        ? `${formatNum(servings)} × ${option.unit}`
-        : `${formatNum(amount)} ${pluralizeUnit(option.unit, amount)}`;
+    servings !== 1 && /^\d/.test(option.unit)
+      ? `${formatNum(servings)} × ${option.unit}`
+      : servingTextFor(option.label, servings);
   return { quantity, servingMultiplier, servingText, nutrition };
 }
