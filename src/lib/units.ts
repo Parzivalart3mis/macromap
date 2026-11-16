@@ -255,11 +255,6 @@ export function isCountUnit(unit: string): boolean {
 }
 
 /** Pluralize count-based units (serving → servings); weights/volumes stay literal. */
-function pluralizeUnit(unit: string, count: number): string {
-  if (count === 1 || classifyUnit(unit).kind !== "count") return unit;
-  return unit.endsWith("s") ? unit : `${unit}s`;
-}
-
 /** Total base measure (ml / g) of one of the food's native servings. */
 export function baseServingAmount(food: FoodDTO): number {
   const { kind, factor } = classifyUnit(food.servingSizeUnit);
@@ -281,7 +276,7 @@ const WEIGHT_CHOICES = ["g", "oz"] as const;
  * scoop) offer only their native unit — there is no reliable conversion.
  */
 export function servingOptions(food: FoodDTO): UnitOption[] {
-  const { kind, canonical } = classifyUnit(food.servingSizeUnit);
+  const { kind } = classifyUnit(food.servingSizeUnit);
   const options: UnitOption[] = [];
   const seen = new Set<number>();
   const push = (value: number, unit: string, baseAmount: number, label?: string) => {
@@ -313,7 +308,7 @@ export function servingOptions(food: FoodDTO): UnitOption[] {
     const label =
       alt.label ??
       (classifyUnit(alt.unit).kind === "count"
-        ? `1 ${alt.unit} (${formatNum(equiv)} ${pluralizeUnit(food.servingSizeUnit, equiv)})`
+        ? `1 ${alt.unit} (${formatNum(equiv)} ${inflectUnitPhrase(food.servingSizeUnit, equiv)})`
         : `1 ${alt.unit}`);
     options.push({ label, value: 1, unit: alt.unit, baseAmount });
   }
@@ -322,14 +317,16 @@ export function servingOptions(food: FoodDTO): UnitOption[] {
 
   const table = kind === "volume" ? VOLUME : WEIGHT;
   const canonicalUnit = kind === "volume" ? "ml" : "g";
-  // The whole native serving in the canonical measure — always shown even when
-  // it equals the native amount (e.g. "1 cup" and "236.59 ml" are both useful).
-  if (canonical !== canonicalUnit) {
-    push(Math.round(base * 100) / 100, canonicalUnit, base);
-  }
-  // One of each common unit of the same kind.
+  // A measure the food already names in a label is not offered again: beside
+  // "1 oz (28 g)" a second, generated "1 oz" (28.35 g) is a near-duplicate that
+  // only invites the wrong tap. The same goes for "1 cup (240 ml)" and "1 cup".
+  const named = (unit: string) =>
+    options.some((o) => o.label === `1 ${unit}` || o.label.startsWith(`1 ${unit} (`));
+  // One of each common unit of the same kind. The native serving restated in
+  // the canonical measure ("236.59 ml" under "1 cup") used to sit here too; it
+  // was never picked and "1 ml" / "100 ml" already cover that need.
   const choices = kind === "volume" ? VOLUME_CHOICES : WEIGHT_CHOICES;
-  for (const unit of choices) add(1, unit, table[unit]);
+  for (const unit of choices) if (!named(unit)) add(1, unit, table[unit]);
   // A 100-unit option is handy for weights/volumes.
   add(100, canonicalUnit, 100);
 

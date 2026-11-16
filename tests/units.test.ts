@@ -90,9 +90,34 @@ describe("servingOptions", () => {
   it("offers native + conversions for a cup-based food", () => {
     const opts = servingOptions(food({ servingSizeValue: 1, servingSizeUnit: "cup" }));
     const labels = opts.map((o) => o.label);
-    expect(labels[0]).toBe("1 cup");
-    expect(labels).toContain("236.59 ml");
-    expect(labels).toContain("1 ml");
+    expect(labels).toEqual(["1 cup", "1 ml", "1 tbsp", "1 tsp", "1 fl oz", "100 ml"]);
+  });
+
+  it("does not restate the native serving in millilitres", () => {
+    // "236.59 ml" used to sit under every "1 cup"; nobody ever picked it.
+    const labels = servingOptions(food({ servingSizeValue: 1, servingSizeUnit: "cup" })).map(
+      (o) => o.label,
+    );
+    expect(labels).not.toContain("236.59 ml");
+  });
+
+  it("does not offer a measure the food's own label already names", () => {
+    const chips = food({ servingSizeValue: 28, servingSizeUnit: "g", servingSizeLabel: "1 oz (28 g)" });
+    expect(servingOptions(chips).map((o) => o.label)).toEqual(["1 oz (28 g)", "1 g", "100 g"]);
+
+    const milk = food({
+      servingSizeValue: 240,
+      servingSizeUnit: "ml",
+      servingSizeLabel: "1 cup (240 ml)",
+    });
+    expect(servingOptions(milk).map((o) => o.label)).toEqual([
+      "1 cup (240 ml)",
+      "1 ml",
+      "1 tbsp",
+      "1 tsp",
+      "1 fl oz",
+      "100 ml",
+    ]);
   });
 
   it("offers only the native unit for count foods", () => {
@@ -134,6 +159,18 @@ describe("servingOptions", () => {
     );
     const container = opts.find((o) => o.unit === "container");
     expect(container?.label).toBe("1 container (4 servings)");
+  });
+
+  it("makes that base unit agree even when it is a measure", () => {
+    // Used to read "1 container (2 cup)".
+    const tea = food({
+      servingSizeValue: 1,
+      servingSizeUnit: "cup",
+      alternateServings: [{ unit: "container", multiplier: 2 }],
+    });
+    expect(servingOptions(tea).find((o) => o.unit === "container")?.label).toBe(
+      "1 container (2 cups)",
+    );
   });
 });
 
