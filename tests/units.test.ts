@@ -272,9 +272,38 @@ describe("scaleServingText", () => {
     );
   });
 
-  it("reads fractions, and keeps text after the parenthetical", () => {
-    expect(scaleServingText("3/4 cup (56 g) dry", 2)).toBe("1.5 cups (112 g) dry");
+  it("keeps a label written in fractions in fractions", () => {
+    // Half of a quarter cup used to read "0.13 cups".
+    expect(scaleServingText("1/4 cup (28 g)", 0.5)).toBe("1/8 cup (14 g)");
+    expect(scaleServingText("1/4 cup (28 g)", 2)).toBe("1/2 cup (56 g)");
+    expect(scaleServingText("3/4 cup (170 g)", 2)).toBe("1 1/2 cups (340 g)");
+    expect(scaleServingText("3/4 cup (170 g)", 1.5)).toBe("1 1/8 cups (255 g)");
+    expect(scaleServingText("2/3 cup (170 g)", 0.75)).toBe("1/2 cup (127.5 g)");
+    expect(scaleServingText("1/3 pizza (128 g)", 3)).toBe("1 pizza (384 g)");
+    expect(scaleServingText("3/4 cup (56 g) dry", 2)).toBe("1 1/2 cups (112 g) dry");
+  });
+
+  it("does the same for fraction glyphs, inside a parenthetical too", () => {
     expect(scaleServingText("½ bagel (56.5 g)", 2)).toBe("1 bagel (113 g)");
+    expect(scaleServingText("½ bagel (56.5 g)", 3)).toBe("1½ bagels (169.5 g)");
+    expect(scaleServingText("1 serving (¼ recipe)", 2)).toBe("2 servings (½ recipe)");
+    expect(scaleServingText("1 serving (¼ recipe)", 4)).toBe("4 servings (1 recipe)");
+  });
+
+  it("falls back to a decimal when the result is not a kitchen fraction", () => {
+    expect(scaleServingText("3/4 cup (170 g)", 1.6)).toBe("1.2 cups (272 g)");
+    expect(scaleServingText("1/4 cup (28 g)", 2.75)).toBe("0.69 cups (77 g)");
+  });
+
+  it("reads a mixed number back, so the edit dialog can divide a stored total", () => {
+    expect(scaleServingText("1 1/2 cups (340 g)", 1 / 2)).toBe("3/4 cup (170 g)");
+    expect(scaleServingText("1½ bagels (169.5 g)", 1 / 3)).toBe("½ bagel (56.5 g)");
+    expect(scaleServingText("1 1/2 cups", 2)).toBe("3 cups");
+  });
+
+  it("leaves a decimal label in decimals", () => {
+    expect(scaleServingText("1 cup", 0.5)).toBe("0.5 cups");
+    expect(scaleServingText("2 slices (41 g)", 0.25)).toBe("0.5 slices (10.25 g)");
   });
 
   it("drops a parenthetical that has no amount to scale", () => {
@@ -285,8 +314,8 @@ describe("scaleServingText", () => {
     expect(scaleServingText("1 medium (118 g)", 1)).toBe("1 medium (118 g)");
     expect(scaleServingText("Custom build", 2)).toBe("Custom build");
     expect(scaleServingText(undefined, 2)).toBeUndefined();
-    // A mixed number is not modelled; mangling it would be worse than leaving it.
-    expect(scaleServingText("1 1/2 cups", 2)).toBe("1 1/2 cups");
+    // Two bare numbers in a row is not an amount and a unit; leave it be.
+    expect(scaleServingText("0.5 16.9 fl oz", 2)).toBe("0.5 16.9 fl oz");
   });
 
   it("scales multiplied texts by their multiplier alone", () => {

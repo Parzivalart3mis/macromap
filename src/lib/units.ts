@@ -131,20 +131,57 @@ export function inflectUnitPhrase(phrase: string, amount: number): string {
   return words.join(" ") + rest;
 }
 
-const VULGAR: Record<string, number> = {
-  "½": 0.5, "⅓": 1 / 3, "⅔": 2 / 3, "¼": 0.25, "¾": 0.75, "⅛": 0.125,
-};
-// A leading amount: "2", "1.5", "3/4", "½" — optionally approximate ("~165").
-const AMOUNT = String.raw`(~?)(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?|[½⅓⅔¼¾⅛])`;
+// Fractions a serving label is written in, and may be written back in.
+const GLYPH_FRACTIONS: [string, number][] = [
+  ["½", 1 / 2], ["⅓", 1 / 3], ["⅔", 2 / 3], ["¼", 1 / 4], ["¾", 3 / 4],
+  ["⅛", 1 / 8], ["⅜", 3 / 8], ["⅝", 5 / 8], ["⅞", 7 / 8],
+];
+const ASCII_FRACTIONS: [string, number][] = [
+  ["1/2", 1 / 2], ["1/3", 1 / 3], ["2/3", 2 / 3], ["1/4", 1 / 4], ["3/4", 3 / 4],
+  ["1/8", 1 / 8], ["3/8", 3 / 8], ["5/8", 5 / 8], ["7/8", 7 / 8],
+];
+const GLYPHS = GLYPH_FRACTIONS.map(([glyph]) => glyph).join("");
+type AmountStyle = "decimal" | "fraction" | "glyph";
+
+// A leading amount: "2", "1.5", "3/4", "1 1/2", "½", "1½" — optionally
+// approximate ("~165").
+const AMOUNT = String.raw`(~?)((?:\d+\s+)?\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?|\d*[${GLYPHS}]|\d+(?:\.\d+)?)`;
 const AMOUNT_PHRASE = new RegExp(String.raw`^${AMOUNT}(\s*)(.*)$`, "u");
 
-function parseAmount(raw: string): number {
-  if (raw in VULGAR) return VULGAR[raw];
-  if (raw.includes("/")) {
-    const [a, b] = raw.split("/").map((part) => Number(part.trim()));
-    return b ? a / b : Number.NaN;
+function parseAmount(raw: string): { value: number; style: AmountStyle } {
+  const glyph = GLYPH_FRACTIONS.find(([g]) => raw.endsWith(g));
+  if (glyph) return { value: Number(raw.slice(0, -1) || 0) + glyph[1], style: "glyph" };
+  const fraction = raw.match(/^(?:(\d+)\s+)?(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+  if (fraction) {
+    const [, whole, top, bottom] = fraction;
+    const value = Number(bottom) ? Number(whole ?? 0) + Number(top) / Number(bottom) : Number.NaN;
+    return { value, style: "fraction" };
   }
-  return Number(raw);
+  return { value: Number(raw), style: "decimal" };
+}
+
+/**
+ * Write an amount back the way its label wrote it. A label in fractions stays
+ * in fractions when the result is a kitchen one — half of "1/4 cup" is
+ * "1/8 cup", not "0.13 cups" — and falls back to a decimal when it is not.
+ * `singular` is how the unit should agree: "1/2 cup" and "1 cup", but
+ * "0.5 cups" and "1 1/2 cups".
+ */
+function formatAmount(value: number, style: AmountStyle): { text: string; singular: boolean } {
+  if (style !== "decimal") {
+    const whole = Math.floor(value + 1e-3);
+    const rest = value - whole;
+    if (Math.abs(rest) < 1e-3) return { text: String(whole), singular: whole === 1 };
+    const hit = (style === "glyph" ? GLYPH_FRACTIONS : ASCII_FRACTIONS).find(
+      ([, fraction]) => Math.abs(fraction - rest) < 2e-3,
+    );
+    if (hit) {
+      const text = whole === 0 ? hit[0] : style === "glyph" ? `${whole}${hit[0]}` : `${whole} ${hit[0]}`;
+      return { text, singular: whole === 0 };
+    }
+  }
+  const rounded = Math.round(value * 100) / 100;
+  return { text: formatNum(rounded), singular: rounded === 1 };
 }
 
 /** Scale one "<amount> <unit phrase>" segment, or null when it is not one. */
@@ -152,12 +189,12 @@ function scaleSegment(segment: string, ratio: number): string | null {
   const match = segment.match(AMOUNT_PHRASE);
   if (!match) return null;
   const [, approx, rawAmount, gap, phrase] = match;
-  // "1 1/2 cups" — a mixed number this parser does not model; leave it be.
+  // "0.5 16.9 fl oz" — two bare numbers in a row is not an amount and a unit.
   if (/^\d/.test(phrase)) return null;
-  const amount = parseAmount(rawAmount);
-  if (!Number.isFinite(amount)) return null;
-  const scaled = Math.round(amount * ratio * 100) / 100;
-  return `${approx}${formatNum(scaled)}${gap}${inflectUnitPhrase(phrase, scaled)}`;
+  const { value, style } = parseAmount(rawAmount);
+  if (!Number.isFinite(value)) return null;
+  const { text, singular } = formatAmount(value * ratio, style);
+  return `${approx}${text}${gap}${inflectUnitPhrase(phrase, singular ? 1 : 2)}`;
 }
 
 /**
@@ -168,8 +205,8 @@ function scaleSegment(segment: string, ratio: number): string | null {
  * Every amount in the text scales together, so the parenthetical stays true
  * instead of going stale — collapsing it to the bare weight ("236 g") is what
  * used to make a logged banana read differently from the one you picked. A
- * parenthetical with no amount in it ("label serving", "¼ recipe") cannot be
- * scaled and is dropped. Texts with no leading amount pass through unchanged.
+ * parenthetical with no amount in it ("label serving") cannot be scaled and is
+ * dropped. Texts with no leading amount pass through unchanged.
  */
 export function scaleServingText(
   text: string | undefined,
