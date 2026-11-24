@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 
 import { handleApiError, parseBody, requireDbUser, requireUserId } from "@/lib/api";
 import { db } from "@/lib/db";
-import { goalActivities, goalDays, goalProfiles } from "@/lib/db/schema";
+import { goalActivities, goalDays, goalProfiles, profiles } from "@/lib/db/schema";
+import { todayInTimeZone } from "@/lib/dates";
+import { currentActivities } from "@/lib/goals/activities";
 import { createGoalProfileSchema } from "@/lib/validations/goals";
 
 const DEFAULT_DAY = { calories: 2000, proteinG: 150, carbsG: 200, fatG: 70 };
@@ -31,11 +33,20 @@ export async function GET() {
             .orderBy(asc(goalActivities.displayOrder)),
         ])
       : [[], []];
+    // Retired activities stay in the table for history; the editor lists only
+    // what applies from today on the user's own calendar.
+    const [profile] = await db
+      .select({ timezone: profiles.timezone })
+      .from(profiles)
+      .where(eq(profiles.userId, userId))
+      .limit(1);
+    const today = todayInTimeZone(profile?.timezone ?? "UTC");
+    const liveActivities = currentActivities(activityRows, today);
     return NextResponse.json({
       goalProfiles: profileRows.map((profile) => ({
         ...profile,
         days: dayRows.filter((day) => day.goalProfileId === profile.id),
-        activities: activityRows.filter((a) => a.goalProfileId === profile.id),
+        activities: liveActivities.filter((a) => a.goalProfileId === profile.id),
       })),
     });
   } catch (error) {

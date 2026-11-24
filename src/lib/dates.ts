@@ -94,3 +94,16 @@ export function zonedDateHour(timeZone: string, now: Date = new Date()): { date:
     hour: Number(part("hour")),
   };
 }
+
+/**
+ * Today's date as YYYY-MM-DD in an IANA timezone, for server code that has to
+ * agree with the user's calendar rather than the server's ("America/Chicago").
+ * An unknown zone falls back to UTC instead of throwing.
+ */
+export function todayInTimeZone(timeZone: string, now: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone }).format(now);
+  } catch {
+    return now.toISOString().slice(0, 10);
+  }
+}
